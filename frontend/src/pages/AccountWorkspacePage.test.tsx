@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, ApiError } from "../api/client";
@@ -49,6 +49,30 @@ const account: JijiaAccount = {
   latestJobAt: null,
   latestDataAt: null,
 };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}
+
+function WorkspaceNavigationHarness() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button type="button" onClick={() => navigate("/accounts/9")}>
+        切换账号
+      </button>
+      <Routes>
+        <Route path="/accounts/:accountId" element={<AccountWorkspacePage />} />
+      </Routes>
+    </>
+  );
+}
 
 function renderWorkspace(state?: { accountError?: string }) {
   return render(
@@ -105,6 +129,85 @@ describe("接入管理账号工作台", () => {
     expect(await screen.findByRole("heading", { name: "北美业务账号" })).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(api.getAccount).toHaveBeenCalledTimes(2);
+  });
+
+  it("手动刷新保留账号上下文、阻止重复请求且失败显示 warning", async () => {
+    const refresh = deferred<JijiaAccount>();
+    vi.mocked(api.getAccount).mockResolvedValueOnce(account).mockReturnValueOnce(refresh.promise);
+    const user = userEvent.setup();
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "北美业务账号" });
+
+    await user.dblClick(screen.getByRole("button", { name: "刷新账号概览" }));
+    await waitFor(() => expect(api.getAccount).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("heading", { name: "北美业务账号" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "配置同步范围" })).toBeInTheDocument();
+    expect(screen.getByText(/正在刷新 · 上次检查/)).toBeVisible();
+
+    await act(async () => {
+      refresh.reject(new Error("offline"));
+      await refresh.promise.catch(() => undefined);
+    });
+    expect(screen.getByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getByRole("heading", { name: "北美业务账号" })).toBeInTheDocument();
+    expect(screen.getByText(/刷新失败 · 仍显示 .* 的结果/)).toBeVisible();
+  });
+
+  it("切换账号后忽略上一账号延迟返回的结果", async () => {
+    const oldAccount = deferred<JijiaAccount>();
+    const nextAccount = deferred<JijiaAccount>();
+    vi.mocked(api.getAccount).mockImplementation((accountId) =>
+      accountId === 8 ? oldAccount.promise : nextAccount.promise,
+    );
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/accounts/8"]}>
+        <WorkspaceNavigationHarness />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(api.getAccount).toHaveBeenCalledWith(8));
+    await user.click(screen.getByRole("button", { name: "切换账号" }));
+    await act(async () => {
+      nextAccount.resolve({ ...account, id: 9, name: "欧洲业务账号" });
+      await nextAccount.promise;
+    });
+    expect(await screen.findByRole("heading", { name: "欧洲业务账号" })).toBeInTheDocument();
+
+    await act(async () => {
+      oldAccount.resolve(account);
+      await oldAccount.promise;
+    });
+    expect(screen.queryByRole("heading", { name: "北美业务账号" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "欧洲业务账号" })).toBeInTheDocument();
+  });
+
+  it("切换账号后旧账号操作完成不能污染新账号状态", async () => {
+    const oldMutation = deferred<JijiaAccount>();
+    vi.mocked(api.getAccount).mockImplementation(async (accountId) =>
+      accountId === 8 ? account : { ...account, id: 9, name: "欧洲业务账号" },
+    );
+    vi.mocked(api.deactivateAccount).mockReturnValue(oldMutation.promise);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/accounts/8"]}>
+        <WorkspaceNavigationHarness />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "停用账号" }));
+    await user.click(screen.getByRole("button", { name: "切换账号" }));
+    expect(await screen.findByRole("heading", { name: "欧洲业务账号" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "停用账号" })).toBeEnabled();
+
+    await act(async () => {
+      oldMutation.resolve({ ...account, status: "inactive" });
+      await oldMutation.promise;
+    });
+
+    expect(screen.queryByText("账号已停用。")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "欧洲业务账号" })).toBeInTheDocument();
+    expect(api.getAccount).not.toHaveBeenCalledTimes(3);
   });
 
   it("Viewer 只能查看脱敏信息，不能修改账号", async () => {

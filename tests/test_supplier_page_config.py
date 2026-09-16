@@ -30,7 +30,7 @@ class SupplierPageConfigTest(unittest.TestCase):
         self.assertEqual(api["primary_key"], {"field": "", "required": False})
         self.assertEqual(api["date_field"], "createdAt")
         self.assertTrue(api["sensitive_response"])
-        self.assertEqual(api["rate_limit"], {"sleep_seconds": 1})
+        self.assertEqual(api["rate_limit"], {"max_requests": 2, "period_seconds": 1})
         self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
         self.assertEqual(api["params"], {"page": 1, "pagesize": 100})
 

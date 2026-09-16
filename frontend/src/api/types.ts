@@ -280,6 +280,12 @@ export interface SyncJob {
 
 export interface WorkerRuntime {
   availability: "online" | "busy" | "offline";
+  capacityStatus: "ready" | "degraded" | "offline";
+  configuredWorkerCount: number;
+  onlineWorkerCount: number;
+  busyWorkerCount: number;
+  idleWorkerCount: number;
+  staleWorkerCount: number;
   heartbeatAt: string | null;
   currentJobId: number | string | null;
   queueDepth: number;

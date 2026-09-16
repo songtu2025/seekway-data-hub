@@ -20,6 +20,8 @@ from backend.app.services.runtime_target_verifier import verify_runtime_target
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_ENVIRONMENTS = {"prod", "production"}
+PRODUCTION_WORKER_PROCESSES = 4
+PRODUCTION_SYNC_LOCK_SCOPE = "account"
 
 
 class _ViteAssetParser(HTMLParser):
@@ -192,6 +194,13 @@ def _production_settings_valid(
         str(web_settings.app_env).lower(),
     }
     if not environments <= PRODUCTION_ENVIRONMENTS:
+        return False
+    if (
+        app_settings.worker_processes != PRODUCTION_WORKER_PROCESSES
+        or web_settings.worker_processes != PRODUCTION_WORKER_PROCESSES
+        or app_settings.sync_lock_scope != PRODUCTION_SYNC_LOCK_SCOPE
+        or web_settings.sync_lock_scope != PRODUCTION_SYNC_LOCK_SCOPE
+    ):
         return False
     runtime_values = (
         app_settings.db_host,

@@ -1,10 +1,11 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Button, Empty, Select, Table, Tag, type TableColumnsType } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { ScheduledPlan } from "../api/types";
 import { formatDate, getApiErrorMessage, statusLabel } from "../pages/m3Utils";
+import { RefreshStatus } from "./RefreshStatus";
 import {
   blockedResumeText,
   nextWindowBasisText,
@@ -139,23 +140,43 @@ export function ScheduledPlansPanel({
   }
   const [plans, setPlans] = useState<ScheduledPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const [error, setError] = useState("");
+  const requestSequenceRef = useRef(0);
+  const inFlightRequestRef = useRef<number | null>(null);
 
-  async function loadPlans() {
-    setLoading(true);
+  const loadPlans = useCallback(async (source: "initial" | "manual") => {
+    if (inFlightRequestRef.current !== null) return;
+    const requestSequence = ++requestSequenceRef.current;
+    inFlightRequestRef.current = requestSequence;
+    if (source === "initial") setLoading(true);
+    else setRefreshing(true);
     setError("");
     try {
-      setPlans(await api.listScheduledPlans());
+      const rows = await api.listScheduledPlans();
+      if (requestSequence !== requestSequenceRef.current) return;
+      setPlans(rows);
+      setLastCheckedAt(new Date());
     } catch (caught) {
+      if (requestSequence !== requestSequenceRef.current) return;
       setError(getApiErrorMessage(caught, "定时计划加载失败，请稍后重试"));
     } finally {
-      setLoading(false);
+      if (requestSequence === requestSequenceRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+      if (inFlightRequestRef.current === requestSequence) inFlightRequestRef.current = null;
     }
-  }
+  }, []);
 
   useEffect(() => {
-    void loadPlans();
-  }, []);
+    void loadPlans("initial");
+    return () => {
+      requestSequenceRef.current += 1;
+      inFlightRequestRef.current = null;
+    };
+  }, [loadPlans]);
 
   const filtered = plans.filter(
     (plan) =>
@@ -175,8 +196,17 @@ export function ScheduledPlansPanel({
         </div>
         <div className="heading-actions">
           {createAction}
-          <Button disabled={loading} loading={loading} onClick={loadPlans}>
-            {loading ? "刷新中…" : "刷新计划"}
+          <RefreshStatus
+            failedWithPreviousData={Boolean(error && plans.length > 0)}
+            lastUpdatedAt={lastCheckedAt}
+            refreshing={refreshing}
+          />
+          <Button
+            disabled={loading || refreshing}
+            loading={refreshing}
+            onClick={() => void loadPlans(lastCheckedAt ? "manual" : "initial")}
+          >
+            刷新计划
           </Button>
         </div>
       </div>
@@ -232,7 +262,7 @@ export function ScheduledPlansPanel({
           <Button onClick={() => setQuery({}, { state: returnState })}>清除筛选</Button>
         ) : null}
       </div>
-      {error ? <Alert title={error} type="error" /> : null}
+      {error ? <Alert title={error} type={plans.length > 0 ? "warning" : "error"} /> : null}
       <Table<ScheduledPlan>
         aria-label="定时计划列表"
         className="scheduled-plans-table"
@@ -267,7 +297,9 @@ export function ScheduledPlansPanel({
           },
         ]}
         dataSource={
-          error ? [] : filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+          error && plans.length === 0
+            ? []
+            : filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
         }
         loading={loading}
         locale={{

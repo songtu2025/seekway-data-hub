@@ -27,7 +27,7 @@ class AllocationDetailPageConfigTest(unittest.TestCase):
         self.assertEqual(page["list_field"], "data.rows")
         self.assertEqual(page["total_field"], "data.total")
 
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 3)
+        self.assertEqual(api["rate_limit"], {"max_requests": 1, "period_seconds": 2})
         self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
         self.assertEqual(
             api["params"],

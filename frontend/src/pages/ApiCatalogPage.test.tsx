@@ -106,6 +106,16 @@ const official: OfficialApiCatalogItem = {
   methodMismatch: false,
 };
 
+function deferred<T>() {
+  let reject!: (reason?: unknown) => void;
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}
+
 describe("接口中心", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -361,6 +371,85 @@ describe("接口中心", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("刷新已接入接口保留筛选分页详情且不会重复请求", async () => {
+    const rows = Array.from({ length: 21 }, (_, index) => ({
+      ...connected,
+      apiCode: `shop_${index}`,
+      name: `店铺接口 ${index}`,
+    }));
+    const catalogRefresh = deferred<ApiCatalogItem[]>();
+    const policyRefresh = deferred<ApiPolicy[]>();
+    vi.mocked(api.getApiCatalog)
+      .mockResolvedValueOnce(rows)
+      .mockReturnValueOnce(catalogRefresh.promise);
+    vi.mocked(api.listPolicies)
+      .mockResolvedValueOnce([policy])
+      .mockReturnValueOnce(policyRefresh.promise);
+    const user = userEvent.setup();
+    renderCatalog("/api-catalog?account=8&q=shop&page=2&pageSize=10&api=shop_10");
+
+    const drawer = await screen.findByRole("dialog");
+    await user.dblClick(screen.getByRole("button", { name: /^刷\s*新$/ }));
+    await waitFor(() => {
+      expect(api.getApiCatalog).toHaveBeenCalledTimes(2);
+      expect(api.listPolicies).toHaveBeenCalledTimes(2);
+    });
+    expect(drawer).toBeVisible();
+    expect(screen.getByRole("searchbox", { name: "搜索接口" })).toHaveValue("shop");
+    expect(readQuery().get("page")).toBe("2");
+    expect(screen.getByText(/正在刷新 · 上次检查/)).toBeVisible();
+
+    await act(async () => {
+      catalogRefresh.resolve(rows);
+      policyRefresh.resolve([policy]);
+    });
+    expect(screen.getByText(/上次检查 \d{2}:\d{2}:\d{2}/)).toBeVisible();
+  });
+
+  it("已接入接口刷新失败保留旧表格并显示 warning", async () => {
+    vi.mocked(api.getApiCatalog).mockResolvedValue([connected]);
+    vi.mocked(api.listPolicies)
+      .mockResolvedValueOnce([policy])
+      .mockRejectedValueOnce(new Error("offline"));
+    const user = userEvent.setup();
+    renderCatalog("/api-catalog?account=8");
+    await screen.findByRole("button", { name: connected.name });
+    await user.click(screen.getByRole("button", { name: /^刷\s*新$/ }));
+
+    expect(await screen.findByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getByRole("button", { name: connected.name })).toBeInTheDocument();
+    expect(screen.getByText(/刷新失败 · 仍显示 .* 的结果/)).toBeVisible();
+  });
+
+  it("官方目录独立记录检查时间，刷新失败仍保留目录", async () => {
+    vi.mocked(api.getOfficialApiCatalog)
+      .mockResolvedValueOnce([official])
+      .mockRejectedValueOnce(new Error("offline"));
+    const user = userEvent.setup();
+    renderCatalog("/api-catalog?view=official");
+    await screen.findByRole("button", { name: official.name });
+    await user.click(screen.getByRole("button", { name: /^刷\s*新$/ }));
+
+    expect(await screen.findByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getByRole("button", { name: official.name })).toBeInTheDocument();
+    expect(screen.getByText(/刷新失败 · 仍显示 .* 的结果/)).toBeVisible();
+  });
+
+  it("切换到官方目录再返回时，策略加载失败仍保留同账号旧策略", async () => {
+    const user = userEvent.setup();
+    renderCatalog("/api-catalog?account=8");
+    await screen.findByRole("link", { name: "创建同步任务" });
+
+    await user.click(screen.getByRole("tab", { name: "官方接口目录" }));
+    await screen.findByRole("button", { name: official.name });
+    vi.mocked(api.listPolicies).mockRejectedValueOnce(new Error("offline"));
+    await user.click(screen.getByRole("tab", { name: "已接入接口" }));
+
+    expect(await screen.findByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getByRole("switch", { name: `${connected.name}账号启用` })).toBeChecked();
+    expect(screen.getByRole("link", { name: "创建同步任务" })).toBeInTheDocument();
+  });
+
   it("切换账号时隐藏旧操作，较晚返回的旧响应不会覆盖新账号", async () => {
     const user = userEvent.setup();
     const accounts = await api.listAccounts();
@@ -386,6 +475,9 @@ describe("接口中心", () => {
     await user.click(await screen.findByRole("option", { name: "欧洲账号" }));
     expect(readQuery().get("account")).toBe("9");
     expect(screen.queryByRole("link", { name: "创建同步任务" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: `${connected.name}账号启用` }),
+    ).not.toBeInTheDocument();
     await act(async () => {
       resolveNew([{ ...connected, accountEnabled: false }]);
     });

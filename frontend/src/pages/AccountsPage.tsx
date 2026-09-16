@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Button, Empty, Input, Spin, Tag } from "antd";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 
@@ -6,6 +6,7 @@ import { api, ApiError } from "../api/client";
 import type { JijiaAccount } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { formatAccountDate, getAccountReadiness } from "./accountReadiness";
 import { statusLabel } from "./m3Utils";
 
@@ -27,28 +28,43 @@ export function AccountsPage() {
         : "all";
   const search = searchParams.get("q") ?? "";
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const [error, setError] = useState("");
-  const [reload, setReload] = useState(0);
+  const requestSequenceRef = useRef(0);
+  const inFlightRequestRef = useRef<number | null>(null);
+
+  const loadAccounts = useCallback(async (source: "initial" | "manual") => {
+    if (inFlightRequestRef.current !== null) return;
+    const requestSequence = ++requestSequenceRef.current;
+    inFlightRequestRef.current = requestSequence;
+    if (source === "initial") setLoading(true);
+    else setRefreshing(true);
+    setError("");
+    try {
+      const rows = await api.listAccounts();
+      if (requestSequence !== requestSequenceRef.current) return;
+      setAccounts(rows);
+      setLastCheckedAt(new Date());
+    } catch (caught) {
+      if (requestSequence !== requestSequenceRef.current) return;
+      setError(caught instanceof ApiError ? caught.message : "账号数据加载失败");
+    } finally {
+      if (requestSequence === requestSequenceRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+      if (inFlightRequestRef.current === requestSequence) inFlightRequestRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
-    api
-      .listAccounts()
-      .then((rows) => {
-        if (active) setAccounts(rows);
-      })
-      .catch((caught) => {
-        if (active) setError(caught instanceof ApiError ? caught.message : "账号数据加载失败");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    void loadAccounts("initial");
     return () => {
-      active = false;
+      requestSequenceRef.current += 1;
+      inFlightRequestRef.current = null;
     };
-  }, [reload]);
+  }, [loadAccounts]);
 
   const accountRows = accounts.map((account) => ({
     account,
@@ -113,9 +129,7 @@ export function AccountsPage() {
   }
 
   function retryLoad() {
-    setLoading(true);
-    setError("");
-    setReload((value) => value + 1);
+    void loadAccounts("initial");
   }
 
   return (
@@ -163,14 +177,16 @@ export function AccountsPage() {
         {error ? (
           <Alert
             action={
-              <Button loading={loading} onClick={retryLoad}>
-                重试加载
-              </Button>
+              accounts.length === 0 ? (
+                <Button loading={loading} onClick={retryLoad}>
+                  重试加载
+                </Button>
+              ) : undefined
             }
             className="page-alert"
             showIcon
             title={error}
-            type="error"
+            type={accounts.length > 0 ? "warning" : "error"}
           />
         ) : null}
 
@@ -179,7 +195,21 @@ export function AccountsPage() {
             <div>
               <strong>数据源账号</strong>
             </div>
-            <span>共 {filteredRows.length} 个结果</span>
+            <div className="heading-actions">
+              <span>共 {filteredRows.length} 个结果</span>
+              <RefreshStatus
+                failedWithPreviousData={Boolean(error && accounts.length > 0)}
+                lastUpdatedAt={lastCheckedAt}
+                refreshing={refreshing}
+              />
+              <Button
+                disabled={loading || refreshing}
+                loading={refreshing}
+                onClick={() => void loadAccounts("manual")}
+              >
+                刷新账号
+              </Button>
+            </div>
           </header>
           <div className="account-overview-head" aria-hidden="true">
             <span>账号</span>
@@ -194,7 +224,7 @@ export function AccountsPage() {
                 <Spin description="正在加载账号…" />
               </div>
             ) : null}
-            {!loading && !error && filteredRows.length === 0 ? (
+            {!loading && (!error || accounts.length > 0) && filteredRows.length === 0 ? (
               <Empty
                 className="empty-state"
                 description={accounts.length ? "没有符合条件的账号" : "尚未接入积加账号"}

@@ -6,6 +6,7 @@ import { api, ApiError } from "../api/client";
 import type { Invitation, User, UserRole, UserStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { ConfirmationModal, InviteMemberModal } from "./MemberActionModals";
 import { InvitationWorkspace, MemberToolbar, MemberWorkspace } from "./MemberDirectorySections";
 import {
@@ -22,6 +23,11 @@ export function MembersPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>("viewer");
   const [usersLoading, setUsersLoading] = useState(true);
   const [invitationsLoading, setInvitationsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [invitationsLoaded, setInvitationsLoaded] = useState(false);
   const [error, setError] = useState("");
   const [usersError, setUsersError] = useState("");
   const [invitationsError, setInvitationsError] = useState("");
@@ -33,6 +39,7 @@ export function MembersPage() {
   const usersGenerationRef = useRef(0);
   const invitationsGenerationRef = useRef(0);
   const inviteGenerationRef = useRef(0);
+  const refreshRequestedRef = useRef(false);
   const view: MembersView = searchParams.get("view") === "invitations" ? "invitations" : "members";
   const search = searchParams.get("q") ?? "";
   const selectedId = parseSelectedId(searchParams.get("member"));
@@ -50,46 +57,59 @@ export function MembersPage() {
     [searchParams, setSearchParams],
   );
 
-  const loadUsers = useCallback(async (): Promise<boolean> => {
+  const loadUsers = useCallback(async (showLoading = true): Promise<boolean> => {
     const generation = ++usersGenerationRef.current;
     setUsersError("");
-    setUsersLoading(true);
+    if (showLoading) setUsersLoading(true);
     try {
       const rows = await api.listUsers();
       if (usersGenerationRef.current !== generation) return false;
       setUsers(rows);
+      setUsersLoaded(true);
       return true;
     } catch (caught) {
       if (usersGenerationRef.current !== generation) return false;
       setUsersError(caught instanceof ApiError ? caught.message : "成员数据加载失败");
       return false;
     } finally {
-      if (usersGenerationRef.current === generation) setUsersLoading(false);
+      if (showLoading && usersGenerationRef.current === generation) setUsersLoading(false);
     }
   }, []);
 
-  const loadInvitations = useCallback(async (): Promise<boolean> => {
+  const loadInvitations = useCallback(async (showLoading = true): Promise<boolean> => {
     const generation = ++invitationsGenerationRef.current;
     setInvitationsError("");
-    setInvitationsLoading(true);
+    if (showLoading) setInvitationsLoading(true);
     try {
       const rows = await api.listInvitations();
       if (invitationsGenerationRef.current !== generation) return false;
       setInvitations(rows);
+      setInvitationsLoaded(true);
       return true;
     } catch (caught) {
       if (invitationsGenerationRef.current !== generation) return false;
       setInvitationsError(caught instanceof ApiError ? caught.message : "邀请数据加载失败");
       return false;
     } finally {
-      if (invitationsGenerationRef.current === generation) setInvitationsLoading(false);
+      if (showLoading && invitationsGenerationRef.current === generation)
+        setInvitationsLoading(false);
     }
   }, []);
 
-  const loadData = useCallback(async (): Promise<boolean> => {
-    const [usersLoaded, invitationsLoaded] = await Promise.all([loadUsers(), loadInvitations()]);
-    return usersLoaded && invitationsLoaded;
-  }, [loadInvitations, loadUsers]);
+  const loadData = useCallback(
+    async (showLoading = true) => {
+      const [usersSucceeded, invitationsSucceeded] = await Promise.all([
+        loadUsers(showLoading),
+        loadInvitations(showLoading),
+      ]);
+      if (usersSucceeded && invitationsSucceeded) {
+        setLastCheckedAt(new Date());
+        setRefreshFailed(false);
+      }
+      return { invitationsSucceeded, usersSucceeded };
+    },
+    [loadInvitations, loadUsers],
+  );
 
   useEffect(() => {
     void loadData();
@@ -97,8 +117,35 @@ export function MembersPage() {
       usersGenerationRef.current += 1;
       invitationsGenerationRef.current += 1;
       inviteGenerationRef.current += 1;
+      refreshRequestedRef.current = false;
     };
   }, [loadData]);
+
+  async function refreshData() {
+    if (
+      refreshRequestedRef.current ||
+      usersLoading ||
+      invitationsLoading ||
+      refreshing ||
+      busy ||
+      inviteBusy
+    )
+      return;
+    refreshRequestedRef.current = true;
+    setRefreshing(true);
+    setRefreshFailed(false);
+    setStatusMessage("");
+    try {
+      const result = await loadData(false);
+      const complete = result.usersSucceeded && result.invitationsSucceeded;
+      const hasAvailableData =
+        usersLoaded || invitationsLoaded || result.usersSucceeded || result.invitationsSucceeded;
+      setRefreshFailed(!complete && hasAvailableData);
+    } finally {
+      setRefreshing(false);
+      refreshRequestedRef.current = false;
+    }
+  }
 
   const {
     filteredInvitations,
@@ -145,7 +192,8 @@ export function MembersPage() {
       const result = await action();
       onSuccess?.(result);
       setStatusMessage(successMessage);
-      const refreshed = await loadData();
+      const refreshResult = await loadData(false);
+      const refreshed = refreshResult.usersSucceeded && refreshResult.invitationsSucceeded;
       if (!refreshed) {
         setStatusMessage(`${successMessage}；操作已成功，列表刷新失败，请稍后重试。`);
       }
@@ -267,7 +315,8 @@ export function MembersPage() {
       setInviteOpen(false);
       updateUrl({ invitation: String(created.id), q: null, view: "invitations" }, true);
       setStatusMessage("邀请已发送");
-      const refreshed = await loadData();
+      const refreshResult = await loadData(false);
+      const refreshed = refreshResult.usersSucceeded && refreshResult.invitationsSucceeded;
       if (inviteGenerationRef.current !== generation) return true;
       if (!refreshed) {
         setStatusMessage("邀请已发送；操作已成功，列表刷新失败，请稍后重试。");
@@ -282,6 +331,24 @@ export function MembersPage() {
     }
   }
 
+  async function retryUsers() {
+    const succeeded = await loadUsers();
+    if (succeeded && invitationsLoaded) {
+      setLastCheckedAt(new Date());
+      setRefreshFailed(false);
+    }
+  }
+
+  async function retryInvitations() {
+    const succeeded = await loadInvitations();
+    if (succeeded && usersLoaded) {
+      setLastCheckedAt(new Date());
+      setRefreshFailed(false);
+    }
+  }
+
+  const pageBusy = busy || refreshing;
+
   return (
     <AppShell>
       <main className="members-page" data-node-id="46:344">
@@ -289,9 +356,29 @@ export function MembersPage() {
           <div>
             <h1>成员与权限</h1>
           </div>
-          <Button className="invite-button" type="primary" onClick={openInviteModal}>
-            ＋&nbsp;&nbsp;邀请成员
-          </Button>
+          <div className="m3-refresh-controls member-heading-actions">
+            <RefreshStatus
+              failedWithPreviousData={refreshFailed && (usersLoaded || invitationsLoaded)}
+              lastUpdatedAt={lastCheckedAt}
+              refreshing={refreshing}
+            />
+            <Button
+              aria-label="刷新成员与邀请"
+              disabled={usersLoading || invitationsLoading || pageBusy || inviteBusy}
+              loading={refreshing}
+              onClick={() => void refreshData()}
+            >
+              刷新成员与邀请
+            </Button>
+            <Button
+              className="invite-button"
+              disabled={pageBusy || inviteBusy}
+              type="primary"
+              onClick={openInviteModal}
+            >
+              ＋&nbsp;&nbsp;邀请成员
+            </Button>
+          </div>
         </header>
 
         <MemberToolbar
@@ -311,16 +398,16 @@ export function MembersPage() {
 
         {usersError ? (
           <Alert
-            action={<Button onClick={() => void loadUsers()}>重试成员</Button>}
+            action={<Button onClick={() => void retryUsers()}>重试成员</Button>}
             title={usersError}
-            type="error"
+            type={usersLoaded ? "warning" : "error"}
           />
         ) : null}
         {invitationsError ? (
           <Alert
-            action={<Button onClick={() => void loadInvitations()}>重试邀请</Button>}
+            action={<Button onClick={() => void retryInvitations()}>重试邀请</Button>}
             title={invitationsError}
-            type="error"
+            type={invitationsLoaded ? "warning" : "error"}
           />
         ) : null}
         {error && !inviteOpen && !confirmation ? <Alert title={error} type="error" /> : null}
@@ -344,6 +431,7 @@ export function MembersPage() {
               protectsLastAdmin,
               selectedRole,
               selectedUser,
+              writeDisabled: refreshing,
             }}
           />
         ) : (
@@ -359,6 +447,7 @@ export function MembersPage() {
               loading: invitationsLoading,
               searchActive: Boolean(search.trim()),
               selectedInvitationRow,
+              writeDisabled: refreshing,
             }}
           />
         )}

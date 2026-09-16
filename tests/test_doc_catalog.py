@@ -1,9 +1,40 @@
 import unittest
 
-from app.doc_catalog import classify_api_detail, execution_plan_for_api
+from app.doc_catalog import classify_api_detail, execution_plan_for_api, official_rate_limit
 
 
 class DocCatalogClassificationTest(unittest.TestCase):
+    def test_extracts_effective_official_rate_limit(self):
+        detail = {
+            "limitTimes": None,
+            "limitPeriod": None,
+            "limitTypeName": "秒",
+            "defaultLimitTimes": 10,
+            "defaultLimitPeriod": 1,
+            "dimensionTypeName": "接口维度",
+        }
+
+        self.assertEqual(
+            official_rate_limit(detail),
+            {
+                "max_requests": 10,
+                "period_seconds": 1,
+                "dimension": "接口维度",
+            },
+        )
+
+    def test_prefers_custom_official_rate_limit(self):
+        detail = {
+            "limitTimes": 1,
+            "limitPeriod": 5,
+            "limitTypeName": "秒",
+            "defaultLimitTimes": 10,
+            "defaultLimitPeriod": 1,
+            "dimensionTypeName": "接口维度",
+        }
+
+        self.assertEqual(official_rate_limit(detail)["period_seconds"], 5)
+
     def test_classifies_page_api_without_business_required_fields_as_direct_candidate(self):
         detail = {
             "apiUrl": "/purchase/goods/brand/page",
@@ -197,6 +228,12 @@ class DocCatalogClassificationTest(unittest.TestCase):
             "has_sensitive_response_fields": False,
         }
 
-        self.assertEqual(execution_plan_for_api(dependency)["execution_bucket"], "needs_upstream_params")
-        self.assertEqual(execution_plan_for_api(sensitive)["execution_bucket"], "needs_sensitive_review")
+        self.assertEqual(
+            execution_plan_for_api(dependency)["execution_bucket"],
+            "needs_upstream_params",
+        )
+        self.assertEqual(
+            execution_plan_for_api(sensitive)["execution_bucket"],
+            "needs_sensitive_review",
+        )
         self.assertEqual(execution_plan_for_api(write)["execution_bucket"], "defer_or_review")

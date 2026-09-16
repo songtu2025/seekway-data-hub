@@ -1,4 +1,5 @@
 {
+  "name": "seekway-data-hub",
   "scripts": {
     "check:duplicates": "jscpd",
     "check:unused": "knip --directory frontend"

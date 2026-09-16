@@ -5,6 +5,7 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { AuthPageFrame } from "../components/login/AuthPageFrame";
+import { PRODUCT_NAME } from "../config/product";
 
 interface LoginValues {
   email: string;
@@ -70,7 +71,7 @@ export function LoginPage() {
   }
 
   return (
-    <AuthPageFrame title="SEEKWAY数据接入平台">
+    <AuthPageFrame title={PRODUCT_NAME}>
       {successMessage ? (
         <Alert
           className="seekway-login__feedback seekway-login__feedback--before-form"

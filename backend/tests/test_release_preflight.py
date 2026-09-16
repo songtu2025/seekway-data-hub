@@ -38,12 +38,13 @@ def _settings(tmp_path: Path):
         db_name="runtime_db",
         db_user="runtime_user",
         db_password="runtime_password",
-        db_pool_size=5,
-        db_max_overflow=5,
+        db_pool_size=3,
+        db_max_overflow=2,
         db_pool_timeout_seconds=30,
         db_connection_budget=40,
         api_workers=2,
-        worker_processes=1,
+        worker_processes=4,
+        sync_lock_scope="account",
         jijia_base_url="https://open.gerpgo.com",
         jijia_app_id="your_app_id",
         jijia_app_key="your_app_key",
@@ -51,6 +52,8 @@ def _settings(tmp_path: Path):
     web_settings = SimpleNamespace(
         app_env="production",
         public_web_url="https://sync.example.invalid",
+        worker_processes=4,
+        sync_lock_scope="account",
     )
     return app_settings, web_settings
 
@@ -147,6 +150,42 @@ def test_release_preflight_blocks_nonproduction_configuration(tmp_path, capsys) 
 
     assert exit_code == 2
     assert json.loads(capsys.readouterr().out)["code"] == "RELEASE_CONFIG_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("settings_name", "field_name", "value"),
+    [
+        ("app", "worker_processes", 1),
+        ("web", "worker_processes", 1),
+        ("app", "sync_lock_scope", "global"),
+        ("web", "sync_lock_scope", "global"),
+    ],
+)
+def test_release_preflight_requires_production_concurrency_configuration(
+    tmp_path,
+    capsys,
+    settings_name,
+    field_name,
+    value,
+) -> None:
+    _build_frontend(tmp_path)
+    app_settings, web_settings = _settings(tmp_path)
+    target = app_settings if settings_name == "app" else web_settings
+    setattr(target, field_name, value)
+
+    exit_code = release_preflight.main(
+        ["--confirm-read-only-database"],
+        project_root=tmp_path,
+        app_settings_loader=lambda: app_settings,
+        web_settings_loader=lambda: web_settings,
+        engine_factory=lambda _settings: pytest.fail("并发配置不合格时不能创建引擎"),
+    )
+
+    assert exit_code == 2
+    assert json.loads(capsys.readouterr().out) == {
+        "status": "blocked",
+        "code": "RELEASE_CONFIG_INVALID",
+    }
 
 
 @pytest.mark.parametrize("field_name", ["db_host", "db_name", "db_user", "db_password"])
@@ -344,6 +383,9 @@ def test_release_preflight_blocks_scheduler_ownership_conflict_before_engine(
   - api_code: sale_return_order_page
     enabled: true
     path: /operation/sale/returnOrder/page
+    rate_limit:
+      max_requests: 5
+      period_seconds: 1
 """,
         encoding="utf-8",
     )

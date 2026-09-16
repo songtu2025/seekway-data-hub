@@ -221,7 +221,7 @@ def test_verify_account_creates_default_policies_without_starting_sync(
     calls: list[tuple[str, str]] = []
     monkeypatch.setattr(
         "backend.app.services.jijia_account_service.verify_account_credentials",
-        lambda app_id, app_key: calls.append((app_id, app_key)),
+        lambda app_id, app_key, **_kwargs: calls.append((app_id, app_key)),
     )
 
     verified = client.post(
@@ -257,7 +257,7 @@ def test_verify_failure_does_not_echo_credentials_or_provider_error(
     ).json()["data"]
     provider_error = "provider rejected sensitive-app-id sensitive-app-key"
 
-    def raise_provider_error(app_id: str, app_key: str) -> None:
+    def raise_provider_error(app_id: str, app_key: str, **_kwargs) -> None:
         raise ValueError(provider_error)
 
     monkeypatch.setattr(
@@ -296,7 +296,7 @@ def test_updating_credentials_resets_status_and_deactivate_is_inactive(
     ).json()["data"]
     monkeypatch.setattr(
         "backend.app.services.jijia_account_service.verify_account_credentials",
-        lambda app_id, app_key: None,
+        lambda app_id, app_key, **_kwargs: None,
     )
     verified = client.post(
         f"/api/v1/jijia-accounts/{created['id']}/verify",
@@ -410,7 +410,7 @@ def test_verify_account_rejects_state_changed_during_external_call(
     )
     cipher = CredentialCipher(harness.settings.credential_encryption_key)
 
-    def verify_with_concurrent_change(_app_id: str, _app_key: str) -> None:
+    def verify_with_concurrent_change(_app_id: str, _app_key: str, **_kwargs) -> None:
         with session_factory() as concurrent_db:
             account = concurrent_db.get(JijiaAccount, account_id)
             assert account is not None
@@ -508,6 +508,9 @@ def test_verify_account_uses_mysql_current_locking_read(
         def rollback(self) -> None:
             return None
 
+        def get_bind(self) -> Any:
+            return object()
+
         def scalar(self, statement: Any) -> JijiaAccount:
             self.statement = statement
             return current
@@ -515,7 +518,7 @@ def test_verify_account_uses_mysql_current_locking_read(
     session = CapturingSession()
     monkeypatch.setattr(
         "backend.app.services.jijia_account_service.verify_account_credentials",
-        lambda _app_id, _app_key: None,
+        lambda _app_id, _app_key, **_kwargs: None,
     )
 
     with pytest.raises(ApiError) as stale:

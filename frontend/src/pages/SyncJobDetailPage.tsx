@@ -7,10 +7,12 @@ import { api } from "../api/client";
 import type { SyncJob } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { SourceBackLink } from "../components/SourceBackLink";
 import { JobRunDiagnostics } from "../components/JobRunDiagnostics";
 import { SyncJobLifecycle } from "../components/SyncJobReadModel";
 import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
+import { useVisiblePolling } from "../hooks/useVisiblePolling";
 import { SyncJobActionPanel, SyncJobProgressSection } from "../components/SyncJobDetailSections";
 import {
   formatDate,
@@ -43,7 +45,11 @@ export function SyncJobDetailPage() {
   const requestedRunId = new URLSearchParams(location.search).get("runId");
   const [job, setJob] = useState<SyncJob | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const jobRef = useRef<SyncJob | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [controllingAction, setControllingAction] = useState<SyncJobControlAction | null>(null);
@@ -53,6 +59,7 @@ export function SyncJobDetailPage() {
   const [diagnosticsNavigationRequest, setDiagnosticsNavigationRequest] = useState(0);
   const routeGenerationRef = useRef(0);
   const requestSequenceRef = useRef(0);
+  const requestInFlightSequenceRef = useRef<number | null>(null);
   const cancelInFlightRef = useRef(false);
   const routeIdentifier = routeTaskNo ?? id;
   const currentJob =
@@ -83,7 +90,9 @@ export function SyncJobDetailPage() {
       byTaskNo: boolean,
       generation: number,
       requestSequence: number,
+      source: "initial" | "manual" | "auto" = "auto",
     ): Promise<SyncJob | null> => {
+      requestInFlightSequenceRef.current = requestSequence;
       try {
         const nextJob = byTaskNo ? await api.getSyncTask(targetId) : await api.getSyncJob(targetId);
         if (
@@ -91,8 +100,12 @@ export function SyncJobDetailPage() {
           requestSequenceRef.current !== requestSequence
         )
           return null;
+        jobRef.current = nextJob;
         setJob(nextJob);
         setError("");
+        setLastUpdatedAt(new Date());
+        if (source === "manual") setRefreshNotice("任务详情已刷新");
+        if (source === "auto") setRefreshNotice("");
         return nextJob;
       } catch (caught) {
         if (
@@ -100,14 +113,24 @@ export function SyncJobDetailPage() {
           requestSequenceRef.current !== requestSequence
         )
           return null;
-        setError(getApiErrorMessage(caught, "任务详情加载失败，请稍后重试"));
+        setError(
+          getApiErrorMessage(
+            caught,
+            jobRef.current ? "刷新失败，当前为上次结果" : "任务详情加载失败，请稍后重试",
+          ),
+        );
         return null;
       } finally {
-        if (
+        const isCurrentRequest =
           routeGenerationRef.current === generation &&
-          requestSequenceRef.current === requestSequence
-        )
+          requestSequenceRef.current === requestSequence;
+        if (isCurrentRequest) {
           setLoading(false);
+          if (source === "manual") setRefreshing(false);
+        }
+        if (requestInFlightSequenceRef.current === requestSequence) {
+          requestInFlightSequenceRef.current = null;
+        }
       }
     },
     [],
@@ -118,6 +141,7 @@ export function SyncJobDetailPage() {
     const generation = ++routeGenerationRef.current;
     const requestSequence = ++requestSequenceRef.current;
     setJob(null);
+    jobRef.current = null;
     setLoading(true);
     setError("");
     setRetrying(false);
@@ -128,7 +152,7 @@ export function SyncJobDetailPage() {
     setActiveHistoryTab("executions");
     setDiagnosticsNavigationRequest(0);
     cancelInFlightRef.current = false;
-    void loadJob(routeIdentifier, Boolean(routeTaskNo), generation, requestSequence);
+    void loadJob(routeIdentifier, Boolean(routeTaskNo), generation, requestSequence, "initial");
     return () => {
       if (routeGenerationRef.current === generation) {
         routeGenerationRef.current += 1;
@@ -153,48 +177,32 @@ export function SyncJobDetailPage() {
     document.getElementById("job-diagnostics")?.scrollIntoView?.({ block: "start" });
   }, [activeHistoryTab, diagnosticsNavigationRequest]);
 
-  useEffect(() => {
-    if (!routeIdentifier || !currentJobIsActive || cancelling) {
-      return undefined;
-    }
-    const generation = routeGenerationRef.current;
-    let cancelled = false;
-    let timer: number | undefined;
-
-    const scheduleNextPoll = () => {
-      timer = window.setTimeout(async () => {
-        if (document.visibilityState !== "visible") {
-          if (!cancelled) scheduleNextPoll();
-          return;
-        }
-        const requestSequence = ++requestSequenceRef.current;
-        const pollIdentifier = currentJob?.taskNo ?? routeIdentifier;
-        const nextJob = await loadJob(
-          pollIdentifier,
-          Boolean(currentJob?.taskNo ?? routeTaskNo),
-          generation,
-          requestSequence,
-        );
-        if (cancelled || routeGenerationRef.current !== generation) return;
-        if (nextJob && !isTaskActive(getTaskStatus(nextJob))) return;
-        scheduleNextPoll();
-      }, 3000);
-    };
-
-    scheduleNextPoll();
-    return () => {
-      cancelled = true;
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [cancelling, currentJob?.taskNo, currentJobIsActive, loadJob, routeIdentifier, routeTaskNo]);
+  useVisiblePolling({
+    enabled: Boolean(routeIdentifier && currentJobIsActive && !cancelling),
+    intervalMs: 3000,
+    onPoll: async () => {
+      if (!routeIdentifier || requestInFlightSequenceRef.current !== null) return;
+      const generation = routeGenerationRef.current;
+      const requestSequence = ++requestSequenceRef.current;
+      const pollIdentifier = jobRef.current?.taskNo ?? routeIdentifier;
+      await loadJob(
+        pollIdentifier,
+        Boolean(jobRef.current?.taskNo ?? routeTaskNo),
+        generation,
+        requestSequence,
+      );
+    },
+  });
 
   function reloadJobDetail() {
-    if (!routeIdentifier || loading) return;
+    if (!routeIdentifier || loading || refreshing || requestInFlightSequenceRef.current !== null)
+      return;
     const generation = routeGenerationRef.current;
     const requestSequence = ++requestSequenceRef.current;
-    setLoading(true);
+    setRefreshing(true);
+    setRefreshNotice("");
     setError("");
-    void loadJob(routeIdentifier, Boolean(routeTaskNo), generation, requestSequence);
+    void loadJob(routeIdentifier, Boolean(routeTaskNo), generation, requestSequence, "manual");
   }
 
   async function retry() {
@@ -425,7 +433,7 @@ export function SyncJobDetailPage() {
             <Alert title={jobCreatedNotice} showIcon type="success" />
           </div>
         ) : null}
-        {loading ? <Spin description="正在加载任务详情…" /> : null}
+        {loading && !currentJob ? <Spin description="正在加载任务详情…" /> : null}
         {error ? (
           <Alert
             action={
@@ -437,10 +445,10 @@ export function SyncJobDetailPage() {
             }
             title={error}
             showIcon
-            type="error"
+            type={currentJob ? "warning" : "error"}
           />
         ) : null}
-        {!loading && currentJob ? (
+        {currentJob ? (
           <>
             <header className="page-heading job-detail-heading">
               <div className="job-detail-heading-copy">
@@ -464,6 +472,14 @@ export function SyncJobDetailPage() {
                   <span>API：{currentJob.apiCode}</span>
                 </p>
                 <p className="job-detail-stage">当前阶段：{executionStageLabel(currentJob)}</p>
+                <p className="job-detail-stage">
+                  <RefreshStatus
+                    failedWithPreviousData={Boolean(error && currentJob)}
+                    lastUpdatedAt={lastUpdatedAt}
+                    manualRefreshMessage={refreshNotice}
+                    refreshing={refreshing}
+                  />
+                </p>
               </div>
             </header>
             <WorkerStatusPanel

@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 import re
-import time
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
@@ -292,7 +291,7 @@ class SyncEngine:
     ) -> dict[str, Any]:
         """用短事务验证单个宽表分页接口。
 
-        销售表现这类接口单页字段很宽、页间还要限流。如果把 HTTP 请求、sleep
+        销售表现这类接口单页字段很宽、页间还要限流。如果把 HTTP 请求、限流等待
         和所有 raw 写入放在同一个事务里，远程 PolarDB 连接更容易在长时间空闲
         或大批量写入时失效。该路径只由 YAML 显式开启，避免改变普通接口行为。
         """
@@ -522,7 +521,6 @@ class SyncEngine:
                 items = self._response_items(payload, api)
                 self._insert_raw_items(connection, api, items, batch_no)
                 item_count += len(items)
-                self._sleep_between_pages(api, page_no, total_count)
 
             self._ensure_pagination_not_truncated(api, item_count, total_count)
             if date_window_caught_up:
@@ -623,7 +621,6 @@ class SyncEngine:
                     if self.pause_callback is not None and self.pause_callback():
                         paused = True
                         break
-                    self._sleep_between_pages(api, page_no, total_count)
 
             if not paused:
                 self._ensure_pagination_not_truncated(api, item_count, total_count)
@@ -725,7 +722,7 @@ class SyncEngine:
         """为短事务同步生成本次请求参数。
 
         日期窗口需要读取 checkpoint，但这个读取应在请求前短暂完成，不能把后续
-        HTTP 分页和 sleep 一起包进数据库事务。
+        HTTP 分页和限流等待一起包进数据库事务。
         """
         if not (api.get("date_window") or {}).get("enabled"):
             return False, self._request_params(api, None)
@@ -843,7 +840,7 @@ class SyncEngine:
             param_offset = self._param_source_offset(connection, api)
             param_sets = self._source_param_sets(connection, api, offset=param_offset)
             total_count = len(param_sets)
-            for index, source_params in enumerate(param_sets, start=1):
+            for source_params in param_sets:
                 params = self._request_params(api, connection)
                 params.update(source_params)
                 payload, attempt_count = self._request_with_retry(api, api_client, token, params)
@@ -857,7 +854,6 @@ class SyncEngine:
                     source_primary_key=self._source_primary_key_from_params(api, params),
                 )
                 item_count += len(items)
-                self._sleep_between_param_requests(api, index, total_count)
 
             checkpoint_extra = {
                 "param_offset": param_offset,
@@ -2015,31 +2011,6 @@ class SyncEngine:
         if total is None:
             return None
         return int(total)
-
-    def _sleep_between_pages(
-        self, api: dict[str, Any], page_no: int, total_count: int | None
-    ) -> None:
-        """在分页请求之间按配置限流。
-
-        只有确认还有下一页时才 sleep，避免最后一页无意义等待。
-        """
-        page_config = api.get("page") or {}
-        page_size = int(page_config.get("page_size") or 20)
-        if total_count is None or page_no * page_size >= total_count:
-            return
-        sleep_seconds = float((api.get("rate_limit") or {}).get("sleep_seconds") or 0)
-        if sleep_seconds > 0:
-            time.sleep(sleep_seconds)
-
-    def _sleep_between_param_requests(
-        self, api: dict[str, Any], index: int, total_count: int
-    ) -> None:
-        """依赖参数接口逐个请求时复用同一套限流配置。"""
-        if index >= total_count:
-            return
-        sleep_seconds = float((api.get("rate_limit") or {}).get("sleep_seconds") or 0)
-        if sleep_seconds > 0:
-            time.sleep(sleep_seconds)
 
     def _update_checkpoint(
         self,

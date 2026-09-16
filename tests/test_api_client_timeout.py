@@ -8,9 +8,10 @@ from app.auth import AccessToken
 
 
 class FakeResponse:
-    def __init__(self, status_code=200, payload=None):
+    def __init__(self, status_code=200, payload=None, headers=None):
         self.status_code = status_code
         self._payload = payload or {"code": 200, "data": {"rows": []}}
+        self.headers = headers or {}
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -48,6 +49,18 @@ class FakeRefreshAuthClient:
         self.calls += 1
         self.force_refresh = force_refresh
         return AccessToken("fresh-token")
+
+
+class FakeRateLimiter:
+    def __init__(self):
+        self.acquisitions = []
+        self.deferrals = []
+
+    def acquire(self, method, path, policy):
+        self.acquisitions.append((method, path, policy))
+
+    def defer(self, method, path, seconds):
+        self.deferrals.append((method, path, seconds))
 
 
 class JijiaApiClientTimeoutTest(unittest.TestCase):
@@ -95,6 +108,51 @@ class JijiaApiClientTimeoutTest(unittest.TestCase):
         self.assertTrue(auth_client.force_refresh)
         self.assertEqual(client.session.calls[0]["headers"]["accessToken"], "stale-token")
         self.assertEqual(client.session.calls[1]["headers"]["accessToken"], "fresh-token")
+
+    def test_every_http_attempt_acquires_shared_endpoint_slot(self):
+        settings = SimpleNamespace(
+            jijia_base_url="https://example.test",
+            jijia_open_gateway_prefix="/api/open",
+        )
+        limiter = FakeRateLimiter()
+        auth_client = FakeRefreshAuthClient()
+        client = JijiaApiClient(
+            settings,
+            auth_client=auth_client,
+            rate_limiter=limiter,
+        )
+        client.session = FakeSession([FakeResponse(status_code=401), FakeResponse()])
+        config = {
+            "api_code": "limited_api",
+            "method": "POST",
+            "path": "/limited/page",
+            "rate_limit": {"max_requests": 2, "period_seconds": 1},
+        }
+
+        client.request(config, AccessToken("stale-token"))
+
+        self.assertEqual(len(limiter.acquisitions), 2)
+        self.assertTrue(all(call[:2] == ("POST", "/limited/page") for call in limiter.acquisitions))
+
+    def test_http_429_defers_endpoint_using_retry_after(self):
+        settings = SimpleNamespace(
+            jijia_base_url="https://example.test",
+            jijia_open_gateway_prefix="/api/open",
+        )
+        limiter = FakeRateLimiter()
+        client = JijiaApiClient(settings, rate_limiter=limiter)
+        client.session = FakeSession([FakeResponse(status_code=429, headers={"Retry-After": "3"})])
+        config = {
+            "api_code": "limited_api",
+            "method": "POST",
+            "path": "/limited/page",
+            "rate_limit": {"max_requests": 2, "period_seconds": 1},
+        }
+
+        with self.assertRaises(HTTPError):
+            client.request(config, AccessToken("token"))
+
+        self.assertEqual(limiter.deferrals, [("POST", "/limited/page", 3.0)])
 
 
 if __name__ == "__main__":

@@ -8311,3 +8311,22 @@
 - `app/` 继续作为平台内部同步内核，受控配置校验、连接检查、只读探测、迁移和必要诊断能力可以保留，本轮不删除或修改任何代码。
 - M4 已统一为“发布准备”，不再以“可上线”暗示生产完成；真实数据库迁移、legacy 数据归属、调度割接、SMTP、HTTPS、systemd/Nginx、ECS 和完整周期验证仍是外部门禁。
 - 本轮只修改项目文档，没有连接外部系统、执行数据库写入、迁移、同步、部署、提交或推送。
+
+## 2026-09-16 并发发布候选：运行状态与冷启动门禁收口
+
+- 前端统一复用可见性轮询和刷新状态：页面隐藏时暂停、恢复后立即检查，同请求去重，旧请求的 success/catch/finally 不覆盖新上下文，刷新失败保留最后一次成功数据。
+- Worker 状态增加配置、在线、忙碌、空闲、失联和队列容量摘要；账号、策略、计划、任务、运行、原始数据与成员页面补齐手动刷新和工作流连续性，不改变后端权限或业务状态。
+- 本地隔离运行配置固定 `WORKER_PROCESSES=4`、`SYNC_LOCK_SCOPE=account`、`DB_POOL_SIZE=3` 和 `DB_MAX_OVERFLOW=2`，与生产连接预算及账号级互斥一致。
+- 新增可重复的本地冷启动门禁：`canary` 按 1→2→4、`burst` 同时启动四个 Worker；启动前拒绝非隔离目标和非空队列，结束后清理自身运行时遥测，不启动 Scheduler。
+- 隔离 MySQL 实测 10 轮 canary 和 10 轮 burst 全部通过，共 80 个 Worker 启动，0 个进程失败、0 次 `OperationalError`、Traceback 或 ERROR；最慢分别在 1.079 秒和 1.369 秒达到 4/4。补充 1 轮验证门禁清理后 `canary-worker-*` 行数为 0。
+- 完整 `scripts/check.ps1` 通过：后端 565 个 pytest（91% 覆盖率）、同步核心 259 个 unittest、前端 392 个 Vitest；Ruff、Mypy、compileall、pip check、Prettier、ESLint、TypeScript、Vite build、jscpd、Knip、Vulture、敏感字面量和 `git diff --check` 均通过。
+- 本轮只使用本机隔离 MySQL，没有调用真实积加 API、执行生产迁移或部署；真实 PolarDB、ECS/systemd 和两个完整调度周期仍是外部门禁。本轮形成范围受控的本地提交，不推送。
+
+## 2026-09-16 SEEKWAY Data Hub 命名改造
+
+- 产品中文名统一为 `SEEKWAY 数据接入中心`，英文名统一为 `SEEKWAY Data Hub`；积加继续作为首个数据源连接器，不改动 `JIJIA_*`、业务表和同步核心。
+- 前端品牌文案和 npm 包名使用新名称；前后端分别集中维护产品展示名，邮件主题、OpenAPI 元数据和运维 CLI 不再使用旧产品名，未新增依赖。
+- ECS 模板改用 `seekway-datahub-*` systemd 标识，运行目录改为 `seekway-data-hub`，Nginx upstream 改为 `seekway_datahub_api`，生产域名固定为 `datahub.seekwaygroup.com`。
+- 部署契约调整为 API 和 Worker 按 1→2→4 金丝雀启动期间保持 Scheduler 关闭；启动新服务前只读枚举遗留 `jijia-*` unit，发现旧服务即停止发布并另行迁移；调度归属完成并单独授权后才能启用 Scheduler。
+- 完整 `scripts/check.ps1` 通过：后端 568 个 pytest（91% 覆盖率）、同步核心 259 个 unittest、前端 391 个 Vitest；Ruff、Mypy、compileall、pip check、Prettier、ESLint、TypeScript、Vite build、jscpd、Knip、Vulture、敏感字面量和 `git diff --check` 均通过。Vite 仍有既有主包体积告警，本轮未做无关拆包。
+- 本轮只在独立 worktree 修改本地仓库；未修改 GitHub 仓库名，未连接或改动生产 ECS、PolarDB、积加 API、DNS、TLS 和 Nginx。

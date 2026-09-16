@@ -11,6 +11,12 @@ const labels: Record<WorkerRuntime["availability"], string> = {
   offline: "执行服务离线",
 };
 
+const capacityLabels: Record<WorkerRuntime["capacityStatus"], string> = {
+  ready: "容量正常",
+  degraded: "容量降级",
+  offline: "容量离线",
+};
+
 export function WorkerStatusPanel({
   compact = false,
   currentExecutionId,
@@ -58,6 +64,8 @@ export function WorkerStatusPanel({
     runtime.currentJobId != null &&
     currentExecutionId != null &&
     String(runtime.currentJobId) === String(currentExecutionId);
+  const capacityDegraded = runtime.capacityStatus === "degraded";
+  const capacitySummary = `配置 ${runtime.configuredWorkerCount}、在线 ${runtime.onlineWorkerCount}、忙碌 ${runtime.busyWorkerCount}、空闲 ${runtime.idleWorkerCount}、失联 ${runtime.staleWorkerCount}、排队 ${runtime.queueDepth}`;
   const compactTitle =
     runtime.availability === "busy"
       ? workerIsHandlingCurrentExecution
@@ -72,12 +80,13 @@ export function WorkerStatusPanel({
           ? "当前任务正在正常执行。"
           : `当前任务正在等待，正在处理任务 ${runtime.currentJobId ?? "—"}。`
         : "可以领取新的排队任务。";
+  const compactCapacityDescription = `${capacityLabels[runtime.capacityStatus]}；${capacitySummary}。`;
 
   if (compact) {
     return (
       <section
         id="worker-status"
-        className={`worker-status worker-status--compact worker-status--${runtime.availability}`}
+        className={`worker-status worker-status--compact worker-status--${capacityDegraded ? "degraded" : runtime.availability}`}
         aria-label="任务执行服务状态"
       >
         <div>
@@ -85,13 +94,16 @@ export function WorkerStatusPanel({
             status={
               runtime.availability === "offline"
                 ? "error"
-                : runtime.availability === "busy"
-                  ? "processing"
-                  : "success"
+                : capacityDegraded
+                  ? "warning"
+                  : runtime.availability === "busy"
+                    ? "processing"
+                    : "success"
             }
             text={<strong>{compactTitle}</strong>}
           />
           <span>{compactDescription}</span>
+          <span>{compactCapacityDescription}</span>
         </div>
         {errorMessage ? (
           <span className="worker-status-refresh-error">状态刷新失败，当前为上次结果。</span>
@@ -115,7 +127,7 @@ export function WorkerStatusPanel({
   return (
     <section
       id="worker-status"
-      className={`worker-status worker-status--${runtime.availability}`}
+      className={`worker-status worker-status--${capacityDegraded ? "degraded" : runtime.availability}`}
       aria-label="任务执行服务状态"
     >
       <div>
@@ -123,24 +135,52 @@ export function WorkerStatusPanel({
           status={
             runtime.availability === "offline"
               ? "error"
-              : runtime.availability === "busy"
-                ? "processing"
-                : "success"
+              : capacityDegraded
+                ? "warning"
+                : runtime.availability === "busy"
+                  ? "processing"
+                  : "success"
           }
-          text={<strong>{labels[runtime.availability]}</strong>}
+          text={<strong>{capacityDegraded ? "执行容量降级" : labels[runtime.availability]}</strong>}
         />
         <span>
           {runtime.availability === "offline"
             ? "任务将继续排队，服务恢复后自动执行；请联系运维处理。"
-            : runtime.availability === "busy"
-              ? `正在执行任务 ${runtime.currentJobId ?? "—"}`
-              : "可以自动领取新的排队任务。"}
+            : capacityDegraded
+              ? "在线 Worker 少于配置数量，任务仍会继续处理；请联系运维检查。"
+              : runtime.availability === "busy"
+                ? `正在执行任务 ${runtime.currentJobId ?? "—"}`
+                : "可以自动领取新的排队任务。"}
         </span>
       </div>
       {errorMessage ? (
         <Alert aria-live="polite" type="warning" title="状态刷新失败，以下为上次成功读取的结果。" />
       ) : null}
       <dl>
+        <div>
+          <dt>容量状态</dt>
+          <dd>{capacityLabels[runtime.capacityStatus]}</dd>
+        </div>
+        <div>
+          <dt>配置 Worker</dt>
+          <dd>{runtime.configuredWorkerCount}</dd>
+        </div>
+        <div>
+          <dt>在线 Worker</dt>
+          <dd>{runtime.onlineWorkerCount}</dd>
+        </div>
+        <div>
+          <dt>忙碌 Worker</dt>
+          <dd>{runtime.busyWorkerCount}</dd>
+        </div>
+        <div>
+          <dt>空闲 Worker</dt>
+          <dd>{runtime.idleWorkerCount}</dd>
+        </div>
+        <div>
+          <dt>失联 Worker</dt>
+          <dd>{runtime.staleWorkerCount}</dd>
+        </div>
         <div>
           <dt>排队任务</dt>
           <dd>{runtime.queueDepth}</dd>

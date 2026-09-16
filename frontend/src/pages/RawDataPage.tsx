@@ -6,6 +6,7 @@ import { api, ApiError } from "../api/client";
 import type { JijiaAccount, RawDataSummary } from "../api/types";
 import { AppShell } from "../components/AppShell";
 import { CursorPagination } from "../components/CursorPagination";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { useCursorPagination, type CursorPaginationState } from "../hooks/useCursorPagination";
 import {
   formatDate,
@@ -62,7 +63,11 @@ export function RawDataPage() {
   const [dataDateStart, setDataDateStart] = useState(selectedDataDateStart);
   const [dataDateEnd, setDataDateEnd] = useState(selectedDataDateEnd);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [paginationNotice, setPaginationNotice] = useState("");
   const savedState = location.state as {
     rawPagination?: CursorPaginationState & { filterKey: string };
@@ -179,8 +184,8 @@ export function RawDataPage() {
         dataDateStart: string;
         dataDateEnd: string;
       },
+      source: "initial" | "refresh" | "page",
     ) {
-      setLoading(true);
       setError("");
       try {
         const result = await api.listRawData({
@@ -201,6 +206,8 @@ export function RawDataPage() {
           return;
         setRows(result.items);
         updateNextCursor(result.nextCursor ?? null);
+        setLastUpdatedAt(new Date());
+        if (source === "refresh") setRefreshNotice("原始数据已刷新");
       } catch (caught) {
         if (
           requestGenerationRef.current === generation &&
@@ -209,7 +216,7 @@ export function RawDataPage() {
           if (cursor && caught instanceof ApiError && caught.code === "CURSOR_INVALID") {
             resetPagination();
             setPaginationNotice("原分页位置已失效，已返回第一页。");
-            await loadRows(undefined, generation, requestFilterKey, filters);
+            await loadRows(undefined, generation, requestFilterKey, filters, source);
             return;
           }
           setError(getApiErrorMessage(caught, "原始数据加载失败，请稍后重试"));
@@ -220,6 +227,8 @@ export function RawDataPage() {
           activeFilterKeyRef.current === requestFilterKey
         ) {
           setLoading(false);
+          setRefreshing(false);
+          setLoadingPage(false);
         }
       }
     },
@@ -244,18 +253,26 @@ export function RawDataPage() {
     setDataDateStart(selectedDataDateStart);
     setDataDateEnd(selectedDataDateEnd);
     setRows([]);
+    setRefreshNotice("");
+    setLastUpdatedAt(null);
     if (!restorePage) resetPagination();
     setLoading(true);
     setError("");
-    void loadRows(cursor, generation, filterKey, {
-      accountId: selectedAccountId,
-      apiCode: selectedApiCode,
-      syncBatchNo: selectedSyncBatchNo,
-      observedBatchNo: selectedObservedBatchNo,
-      sourcePrimaryKey: selectedSourcePrimaryKey,
-      dataDateStart: selectedDataDateStart,
-      dataDateEnd: selectedDataDateEnd,
-    });
+    void loadRows(
+      cursor,
+      generation,
+      filterKey,
+      {
+        accountId: selectedAccountId,
+        apiCode: selectedApiCode,
+        syncBatchNo: selectedSyncBatchNo,
+        observedBatchNo: selectedObservedBatchNo,
+        sourcePrimaryKey: selectedSourcePrimaryKey,
+        dataDateStart: selectedDataDateStart,
+        dataDateEnd: selectedDataDateEnd,
+      },
+      "initial",
+    );
 
     return () => {
       if (requestGenerationRef.current === generation) {
@@ -295,20 +312,32 @@ export function RawDataPage() {
 
   function loadPage(cursor: string | undefined) {
     setPaginationNotice("");
+    setRefreshNotice("");
     const generation = ++requestGenerationRef.current;
     activeFilterKeyRef.current = filterKey;
-    setRows([]);
-    setLoading(true);
+    const source = cursor === undefined && pagination.pageIndex === 0 ? "refresh" : "page";
+    if (source === "refresh") {
+      setRefreshing(true);
+      setRefreshNotice("");
+    } else {
+      setLoadingPage(true);
+    }
     setError("");
-    void loadRows(cursor, generation, filterKey, {
-      accountId: selectedAccountId,
-      apiCode: selectedApiCode,
-      syncBatchNo: selectedSyncBatchNo,
-      observedBatchNo: selectedObservedBatchNo,
-      sourcePrimaryKey: selectedSourcePrimaryKey,
-      dataDateStart: selectedDataDateStart,
-      dataDateEnd: selectedDataDateEnd,
-    });
+    void loadRows(
+      cursor,
+      generation,
+      filterKey,
+      {
+        accountId: selectedAccountId,
+        apiCode: selectedApiCode,
+        syncBatchNo: selectedSyncBatchNo,
+        observedBatchNo: selectedObservedBatchNo,
+        sourcePrimaryKey: selectedSourcePrimaryKey,
+        dataDateStart: selectedDataDateStart,
+        dataDateEnd: selectedDataDateEnd,
+      },
+      source,
+    );
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -612,7 +641,11 @@ export function RawDataPage() {
                   {hasVerificationContext ? "清除附加筛选" : "重置筛选"}
                 </Button>
               ) : null}
-              <Button htmlType="submit" type="primary" loading={loading}>
+              <Button
+                htmlType="submit"
+                type="primary"
+                loading={loading || refreshing || loadingPage}
+              >
                 查询
               </Button>
             </div>
@@ -636,11 +669,11 @@ export function RawDataPage() {
             role="alert"
             title={error}
             showIcon
-            type="error"
+            type={rows.length > 0 ? "warning" : "error"}
             action={
               <Button
                 onClick={() => loadPage(pagination.pageCursors[pagination.pageIndex])}
-                loading={loading}
+                loading={loading || refreshing || loadingPage}
               >
                 重试
               </Button>
@@ -650,20 +683,31 @@ export function RawDataPage() {
         <section className="m3-card" aria-labelledby="raw-title">
           <div className="m3-card-heading">
             <h2 id="raw-title">当前快照</h2>
-            <span>
-              {loading
-                ? "正在查询"
-                : error
-                  ? "查询失败"
-                  : `第 ${pagination.pageIndex + 1} 页 · ${rows.length} 条`}
-              {hasActiveFilters ? " · 已应用筛选" : ""}
-            </span>
+            <div>
+              <span>
+                {loading
+                  ? "正在查询"
+                  : loadingPage
+                    ? "正在切换页面"
+                    : `第 ${pagination.pageIndex + 1} 页 · ${rows.length} 条`}
+                {hasActiveFilters ? " · 已应用筛选" : ""}
+              </span>
+              <RefreshStatus
+                failedWithPreviousData={Boolean(error && rows.length)}
+                lastUpdatedAt={lastUpdatedAt}
+                manualRefreshMessage={refreshNotice}
+                refreshing={refreshing}
+              />
+            </div>
           </div>
           <Table<RawDataSummary>
             aria-label="原始数据当前快照列表"
             columns={columns}
             dataSource={rows}
-            loading={{ spinning: loading, description: "正在加载原始数据…" }}
+            loading={{
+              spinning: loading || loadingPage,
+              description: loading ? "正在加载原始数据…" : "正在更新数据…",
+            }}
             locale={{
               emptyText:
                 loading || error ? null : (
@@ -680,7 +724,7 @@ export function RawDataPage() {
             controller={pagination}
             itemCount={rows.length}
             loadPage={loadPage}
-            loading={loading}
+            loading={loading || refreshing || loadingPage}
           />
         </section>
       </main>

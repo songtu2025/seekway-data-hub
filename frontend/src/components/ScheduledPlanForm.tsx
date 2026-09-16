@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Button, Empty, Input, Modal, Select, Spin } from "antd";
 import type { InputRef } from "antd";
 import { Link } from "react-router-dom";
@@ -8,12 +8,30 @@ import { buildPolicyUpdate, MAX_BATCH_POLICIES } from "../policyUtils";
 import { businessDomainLabel } from "../businessDomains";
 import { PolicyDomainGroup } from "./PolicyDomainGroup";
 import { PolicyScheduleFields } from "./PolicyScheduleFields";
+import { RefreshStatus } from "./RefreshStatus";
 import { formatDate } from "../pages/m3Utils";
 import { ScheduledPlanRangeRules } from "./ScheduledPlanWindowPreview";
 
+type ConfigurationResults = [
+  PromiseSettledResult<JijiaAccount>,
+  PromiseSettledResult<ApiPolicy[]>,
+  PromiseSettledResult<ScheduledPlan[]>,
+];
+
+function getConfigurationLoadError(
+  results: PromiseSettledResult<unknown>[],
+  targetMissing: boolean,
+  manual: boolean,
+) {
+  if (targetMissing) return "找不到指定接口，请返回定时计划重新选择。";
+  const rejectedResult = results.find((result) => result.status === "rejected");
+  const caught = rejectedResult?.status === "rejected" ? rejectedResult.reason : null;
+  if (caught instanceof ApiError) return caught.message;
+  return manual ? "计划配置刷新失败，请稍后重试" : "计划配置加载失败";
+}
+
 export function ScheduledPlanForm({
   accountId,
-  refreshToken,
   apiCode,
   canEdit,
   csrfToken,
@@ -24,7 +42,6 @@ export function ScheduledPlanForm({
   onBusyChange,
 }: {
   accountId: number;
-  refreshToken: number;
   apiCode?: string;
   canEdit: boolean;
   csrfToken: string | null;
@@ -38,6 +55,11 @@ export function ScheduledPlanForm({
   const [policies, setPolicies] = useState<ApiPolicy[]>([]);
   const [scheduledPlan, setScheduledPlan] = useState<ScheduledPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const [refreshNotice, setRefreshNotice] = useState("");
+  const [hasLoadedConfiguration, setHasLoadedConfiguration] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   const [expressionError, setExpressionError] = useState("");
@@ -52,47 +74,120 @@ export function ScheduledPlanForm({
   const [closed, setClosed] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const generationRef = useRef(0);
+  const inFlightGenerationRef = useRef<number | null>(null);
+  const refreshRequestedRef = useRef(false);
+  const selectedCodesRef = useRef(selectedCodes);
+  const hasLoadedConfigurationRef = useRef(hasLoadedConfiguration);
   const initializedRef = useRef(false);
   const expressionRef = useRef<InputRef>(null);
+  selectedCodesRef.current = selectedCodes;
+  hasLoadedConfigurationRef.current = hasLoadedConfiguration;
 
-  useEffect(() => {
-    const generation = ++generationRef.current;
-    setLoading(true);
-    setLoadError("");
-    Promise.all([
-      api.getAccount(accountId),
-      api.listPolicies(accountId),
-      apiCode ? api.listScheduledPlans() : Promise.resolve([]),
-    ])
-      .then(([loadedAccount, rows, scheduledPlans]) => {
-        if (generationRef.current !== generation) return;
-        setAccount(loadedAccount);
-        setPolicies(rows);
+  const applyLoadedPolicies = useCallback(
+    (rows: ApiPolicy[], hadPreviousConfiguration: boolean) => {
+      const refreshedTarget = rows.find((policy) => policy.apiCode === apiCode);
+      const targetMissing = Boolean(apiCode && !refreshedTarget);
+      if (!targetMissing || !hadPreviousConfiguration) setPolicies(rows);
+      if (refreshedTarget && !initializedRef.current) {
+        initializedRef.current = true;
+        setSelectedCodes(new Set([refreshedTarget.apiCode]));
+        setMode(
+          refreshedTarget.scheduleMode === "manual_only" ? "daily" : refreshedTarget.scheduleMode,
+        );
+        setExpression(refreshedTarget.scheduleExpr ?? "");
+        return { removedSelectionCount: 0, targetMissing };
+      }
+      if (apiCode) return { removedSelectionCount: 0, targetMissing };
+
+      const availableCodes = new Set(rows.map((policy) => policy.apiCode));
+      const nextSelection = new Set(
+        [...selectedCodesRef.current].filter((code) => availableCodes.has(code)),
+      );
+      const removedSelectionCount = selectedCodesRef.current.size - nextSelection.size;
+      if (removedSelectionCount) setSelectedCodes(nextSelection);
+      return { removedSelectionCount, targetMissing };
+    },
+    [apiCode],
+  );
+
+  const applyConfigurationResults = useCallback(
+    (
+      results: ConfigurationResults,
+      generation: number,
+      manual: boolean,
+      hadPreviousConfiguration: boolean,
+    ) => {
+      if (generationRef.current !== generation) return;
+      const [accountResult, policiesResult, plansResult] = results;
+      if (accountResult.status === "fulfilled") setAccount(accountResult.value);
+
+      const policyOutcome =
+        policiesResult.status === "fulfilled"
+          ? applyLoadedPolicies(policiesResult.value, hadPreviousConfiguration)
+          : { removedSelectionCount: 0, targetMissing: false };
+      if (plansResult.status === "fulfilled") {
         setScheduledPlan(
-          scheduledPlans.find(
+          plansResult.value.find(
             (plan) => plan.jijiaAccountId === accountId && plan.apiCode === apiCode,
           ) ?? null,
         );
-        const target = rows.find((policy) => policy.apiCode === apiCode);
-        if (apiCode && !target) setLoadError("找不到指定接口，请返回定时计划重新选择。");
-        if (target && !initializedRef.current) {
-          initializedRef.current = true;
-          setSelectedCodes(new Set([target.apiCode]));
-          setMode(target.scheduleMode === "manual_only" ? "daily" : target.scheduleMode);
-          setExpression(target.scheduleExpr ?? "");
+      }
+
+      const coreSucceeded =
+        accountResult.status === "fulfilled" &&
+        policiesResult.status === "fulfilled" &&
+        !policyOutcome.targetMissing;
+      const allSucceeded = coreSucceeded && plansResult.status === "fulfilled";
+      if (coreSucceeded) setHasLoadedConfiguration(true);
+      if (allSucceeded) {
+        setLastCheckedAt(new Date());
+        setRefreshFailed(false);
+        if (manual && policyOutcome.removedSelectionCount) {
+          setRefreshNotice(
+            `${policyOutcome.removedSelectionCount} 个已选接口已不可用，已从选择中移除。`,
+          );
         }
-      })
-      .catch((caught) => {
-        if (generationRef.current === generation)
-          setLoadError(caught instanceof ApiError ? caught.message : "计划配置加载失败");
-      })
+        return;
+      }
+
+      setLoadError(getConfigurationLoadError(results, policyOutcome.targetMissing, manual));
+      setRefreshFailed(manual && hadPreviousConfiguration);
+    },
+    [accountId, apiCode, applyLoadedPolicies],
+  );
+
+  useEffect(() => {
+    const generation = ++generationRef.current;
+    const manual = reload > 0;
+    const hadPreviousConfiguration = hasLoadedConfigurationRef.current;
+    inFlightGenerationRef.current = generation;
+    if (manual) setRefreshing(true);
+    else setLoading(true);
+    setLoadError("");
+    setRefreshNotice("");
+    void Promise.allSettled([
+      api.getAccount(accountId),
+      api.listPolicies(accountId),
+      apiCode ? api.listScheduledPlans() : Promise.resolve([]),
+    ] as const)
+      .then((results) =>
+        applyConfigurationResults(results, generation, manual, hadPreviousConfiguration),
+      )
       .finally(() => {
-        if (generationRef.current === generation) setLoading(false);
+        if (generationRef.current !== generation) return;
+        setLoading(false);
+        setRefreshing(false);
+        if (inFlightGenerationRef.current === generation) inFlightGenerationRef.current = null;
+        refreshRequestedRef.current = false;
       });
     return () => {
       generationRef.current += 1;
+      if (inFlightGenerationRef.current === generation) {
+        inFlightGenerationRef.current = null;
+        refreshRequestedRef.current = false;
+      }
     };
-  }, [accountId, apiCode, reload, refreshToken]);
+  }, [accountId, apiCode, applyConfigurationResults, reload]);
 
   const target = policies.find((policy) => policy.apiCode === apiCode);
   const selected = policies.filter((policy) => selectedCodes.has(policy.apiCode));
@@ -118,8 +213,33 @@ export function ScheduledPlanForm({
   const closeBlocked =
     account?.status !== "active" || Boolean(target?.enabled && !target.catalogEnabled);
 
+  function refreshConfiguration() {
+    if (
+      busy ||
+      loading ||
+      refreshing ||
+      refreshRequestedRef.current ||
+      inFlightGenerationRef.current !== null
+    )
+      return;
+    refreshRequestedRef.current = true;
+    setRefreshFailed(false);
+    setRefreshNotice("");
+    setActionError("");
+    setSavedPlans([]);
+    setClosed(false);
+    setReload((value) => value + 1);
+  }
+
   async function save(close = false) {
-    if (!canEdit || !csrfToken || busy || !selected.length || (close ? closeBlocked : blocked))
+    if (
+      !canEdit ||
+      !csrfToken ||
+      busy ||
+      refreshing ||
+      !selected.length ||
+      (close ? closeBlocked : blocked)
+    )
       return;
     if (!close && !expression.trim()) {
       setExpressionError(mode === "daily" ? "请输入每日执行时间" : "请输入 Cron 表达式");
@@ -134,6 +254,7 @@ export function ScheduledPlanForm({
     setBusy(true);
     onBusyChange(true);
     setActionError("");
+    setRefreshNotice("");
     setExpressionError("");
     setSavedPlans([]);
     setClosed(false);
@@ -189,6 +310,7 @@ export function ScheduledPlanForm({
   function toggle(apiCode: string, checked: boolean) {
     if (selectedCodes.has(apiCode) === checked) return;
     setActionError("");
+    setRefreshNotice("");
     setSelectedCodes((current) => {
       const next = new Set(current);
       if (checked) next.add(apiCode);
@@ -199,20 +321,37 @@ export function ScheduledPlanForm({
   }
 
   if (loading && !account) return <Spin description="正在加载计划配置…" />;
-  if (!loading && loadError && (!account || (apiCode && !target))) {
+  if (!loading && loadError && !hasLoadedConfiguration) {
     return (
       <Alert
         type="error"
         title={loadError}
-        action={<Button onClick={() => setReload((value) => value + 1)}>重新加载</Button>}
+        action={<Button onClick={refreshConfiguration}>重新加载</Button>}
       />
     );
   }
   return (
     <div className="scheduled-plan-form">
-      <p className="scheduled-plan-current-account">
-        当前账号：{account?.name ?? "未加载"}。每个接口独立生成任务。
-      </p>
+      <div className="scheduled-plan-refresh-bar">
+        <p className="scheduled-plan-current-account">
+          当前账号：{account?.name ?? "未加载"}。每个接口独立生成任务。
+        </p>
+        <div className="m3-refresh-controls">
+          <RefreshStatus
+            failedWithPreviousData={refreshFailed && hasLoadedConfiguration}
+            lastUpdatedAt={lastCheckedAt}
+            refreshing={refreshing}
+          />
+          <Button
+            aria-label="重新检查配置"
+            disabled={busy || loading || refreshing}
+            loading={refreshing}
+            onClick={refreshConfiguration}
+          >
+            重新检查配置
+          </Button>
+        </div>
+      </div>
       {account?.status !== "active" ? (
         <Alert
           type="warning"
@@ -222,8 +361,8 @@ export function ScheduledPlanForm({
               <Link to={`/accounts/${accountId}`} target="_blank" rel="noopener noreferrer">
                 管理账号
               </Link>
-              <Button disabled={busy} onClick={() => setReload((value) => value + 1)}>
-                重新检查
+              <Button disabled={busy || refreshing} onClick={refreshConfiguration}>
+                再次检查账号状态
               </Button>
             </>
           }
@@ -231,11 +370,12 @@ export function ScheduledPlanForm({
       ) : null}
       {loadError ? (
         <Alert
-          type="error"
+          type={hasLoadedConfiguration ? "warning" : "error"}
           title={loadError}
-          action={<Button onClick={() => setReload((value) => value + 1)}>重新加载</Button>}
+          action={<Button onClick={refreshConfiguration}>重新加载</Button>}
         />
       ) : null}
+      {refreshNotice ? <Alert type="info" title={refreshNotice} /> : null}
       <div className="scheduled-plan-workspace">
         <section
           className="job-create-section scheduled-plan-interface-section"
@@ -303,6 +443,7 @@ export function ScheduledPlanForm({
                   disabled={busy || selectableFiltered.length === 0}
                   onClick={() => {
                     setActionError("");
+                    setRefreshNotice("");
                     setSelectedCodes(
                       (current) =>
                         new Set([
@@ -319,6 +460,7 @@ export function ScheduledPlanForm({
                   disabled={busy || selected.length === 0}
                   onClick={() => {
                     setActionError("");
+                    setRefreshNotice("");
                     setSelectedCodes(new Set());
                     onDirtyChange(true);
                   }}
@@ -459,14 +601,21 @@ export function ScheduledPlanForm({
                   type="primary"
                   loading={busy}
                   disabled={
-                    busy || blocked || !selected.length || selected.length > MAX_BATCH_POLICIES
+                    busy ||
+                    refreshing ||
+                    blocked ||
+                    !selected.length ||
+                    selected.length > MAX_BATCH_POLICIES
                   }
                   onClick={() => void save()}
                 >
                   {apiCode ? "保存修改" : `保存 ${selected.length} 个定时计划`}
                 </Button>
                 {target && target.scheduleMode !== "manual_only" ? (
-                  <Button disabled={busy || closeBlocked} onClick={() => setConfirmClose(true)}>
+                  <Button
+                    disabled={busy || refreshing || closeBlocked}
+                    onClick={() => setConfirmClose(true)}
+                  >
                     关闭定时执行
                   </Button>
                 ) : null}

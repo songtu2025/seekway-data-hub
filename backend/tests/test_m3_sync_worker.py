@@ -8,6 +8,11 @@ from sqlalchemy import event, insert, select, update
 from sqlalchemy.dialects import mysql
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api_config_registry import (
+    api_config_hash,
+    api_config_snapshot,
+    load_published_api_config,
+)
 from app.auth import JijiaCredentials
 from app.sync_engine import SyncEngine as AppSyncEngine
 from app.sync_lock import SyncTaskLockUnavailable
@@ -282,11 +287,9 @@ def test_worker_chains_two_continuous_windows_and_links_one_batch_each(
         assert queued.window_end == date(2020, 3, 2)
         assert queued.market_ids_json == [101, 202]
         assert queued.max_attempts == 2
-        assert queued.queued_at == fixed_now + timedelta(seconds=0.2)
+        assert queued.queued_at == fixed_now
         second_id = queued.id
 
-    assert worker.run_once() is None
-    current_now[0] = fixed_now + timedelta(seconds=0.2)
     assert worker.run_once() == second_id
     with harness.session_factory() as db:
         jobs = db.scalars(select(SyncJob).order_by(SyncJob.id)).all()
@@ -331,21 +334,8 @@ def test_worker_uses_published_config_for_chaining(
         assert queued.window_end == date(2020, 3, 2)
 
 
-@pytest.mark.parametrize(
-    ("job_type", "range_mode", "snapshot", "expected_delay"),
-    [
-        ("history_backfill", "checkpoint", {"rate_limit": {"sleep_seconds": 20}}, 20),
-        ("update_incremental", "checkpoint", {}, 0),
-        ("sync", "custom", {"rate_limit": {"sleep_seconds": 0}}, 0),
-        ("sync", "custom", {"rate_limit": {"sleep_seconds": -5}}, 0),
-    ],
-)
-def test_chained_job_respects_frozen_rate_limit_for_all_window_modes(
+def test_chained_job_is_immediately_eligible_because_http_client_limits_requests(
     monkeypatch,
-    job_type: str,
-    range_mode: str,
-    snapshot: dict[str, Any],
-    expected_delay: int,
 ) -> None:
     fixed_now = datetime(2026, 9, 11, 8, 0, 0)
     monkeypatch.setattr("backend.app.services.sync_worker.utc_now", lambda: fixed_now)
@@ -355,7 +345,7 @@ def test_chained_job_respects_frozen_rate_limit_for_all_window_modes(
         id=1,
         jijia_account_id=2,
         api_code="rate_limited_api",
-        job_type=job_type,
+        job_type="history_backfill",
         trigger_type="manual",
         requested_by=3,
         window_start=date(2026, 9, 9),
@@ -363,22 +353,21 @@ def test_chained_job_respects_frozen_rate_limit_for_all_window_modes(
         progress_json=None,
         worker_id="worker-rate-limit",
         attempt_count=1,
-        range_mode=range_mode,
-        api_config_snapshot_json=snapshot,
+        range_mode="checkpoint",
     )
 
     SyncWorker._add_chained_job(
         cast(Any, db),
         execution,
         _ChainedJobPlan(
-            job_type=job_type,
+            job_type="history_backfill",
             window_start=date(2026, 9, 10),
             window_end=date(2026, 9, 10),
             progress={},
         ),
     )
 
-    assert added_jobs[0].queued_at == fixed_now + timedelta(seconds=expected_delay)
+    assert added_jobs[0].queued_at == fixed_now
 
 
 def test_final_history_window_chains_update_catchup_without_gaps(
@@ -1192,6 +1181,7 @@ def test_core_executor_uses_incremental_target_not_history_frozen_end(
 
         def test_api_once(self, api_code, _api_client, _token):
             api = next(item for item in self.api_configs if item["api_code"] == api_code)
+            captured["rate_limit"] = api["rate_limit"]
             engine = AppSyncEngine([api], sync_context=self.context)
             engine._ensure_execution_allowed(api)
             captured["params"] = engine._request_params(api)
@@ -1228,7 +1218,7 @@ def test_core_executor_uses_incremental_target_not_history_frozen_end(
     )
     monkeypatch.setattr(
         "backend.app.services.sync_worker.load_settings",
-        lambda: object(),
+        lambda: SimpleNamespace(jijia_rate_limit_utilization=0.9),
     )
     monkeypatch.setattr(
         "backend.app.services.sync_worker.JijiaAuthClient",
@@ -1238,6 +1228,10 @@ def test_core_executor_uses_incremental_target_not_history_frozen_end(
         "backend.app.services.sync_worker.import_module",
         fake_import_module,
     )
+    with harness.session_factory() as db:
+        current_config = load_published_api_config(db, "sale_return_order_page")
+    frozen_config = api_config_snapshot(current_config)
+    frozen_config["rate_limit"] = {"max_requests": 1, "period_seconds": 9}
     job = SyncJobExecution(
         id=99,
         jijia_account_id=7,
@@ -1254,6 +1248,8 @@ def test_core_executor_uses_incremental_target_not_history_frozen_end(
         worker_id="worker-test",
         attempt_count=1,
         market_ids=(101, 202),
+        api_config_hash=api_config_hash(frozen_config),
+        api_config_snapshot_json=frozen_config,
     )
 
     heartbeat_calls: list[None] = []
@@ -1266,6 +1262,7 @@ def test_core_executor_uses_incremental_target_not_history_frozen_end(
     assert captured["params"]["updateTimeBegin"] == "2026-08-25 00:00:00"
     assert captured["params"]["updateTimeEnd"] == "2026-08-25 23:59:59"
     assert captured["params"]["marketIds"] == [101, 202]
+    assert captured["rate_limit"] == {"max_requests": 5, "period_seconds": 1}
     assert lock_calls == [{"scope": "account", "account_id": 7}]
 
 

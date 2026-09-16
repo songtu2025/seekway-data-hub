@@ -151,6 +151,12 @@ describe("数据中心通用解析页", () => {
     vi.mocked(api.listAccounts).mockResolvedValue([account]);
     vi.mocked(api.getWorkerRuntime).mockResolvedValue({
       availability: "online",
+      capacityStatus: "ready",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 1,
+      busyWorkerCount: 0,
+      idleWorkerCount: 1,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-09-06T08:00:00Z",
       currentJobId: null,
       queueDepth: 0,

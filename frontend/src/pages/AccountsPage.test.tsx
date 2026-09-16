@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,6 +46,16 @@ const account: JijiaAccount = {
   latestJobAt: null,
   latestDataAt: null,
 };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}
 
 function AccountsNavigationHarness() {
   const navigate = useNavigate();
@@ -178,8 +188,34 @@ describe("接入管理账号列表", () => {
 
     expect(await screen.findByText("账号数据加载失败")).toBeInTheDocument();
     expect(screen.queryByText("尚未接入积加账号")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "重试加载" }));
+    await user.click(await screen.findByRole("button", { name: "重试加载" }));
     expect(await screen.findByText("北美业务账号")).toBeInTheDocument();
     expect(api.listAccounts).toHaveBeenCalledTimes(2);
+  });
+
+  it("手动刷新保留账号与筛选、阻止重复请求，失败后显示旧结果", async () => {
+    const refresh = deferred<JijiaAccount[]>();
+    vi.mocked(api.listAccounts)
+      .mockResolvedValueOnce([account])
+      .mockReturnValueOnce(refresh.promise);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/accounts?q=北美"]}>
+        <AccountsPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("北美业务账号");
+    await user.dblClick(screen.getByRole("button", { name: "刷新账号" }));
+    await waitFor(() => expect(api.listAccounts).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("北美业务账号")).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "搜索账号" })).toHaveValue("北美");
+    expect(screen.getByText(/正在刷新 · 上次检查/)).toBeVisible();
+
+    await act(async () => refresh.reject(new Error("刷新失败")));
+    expect(screen.getByText("北美业务账号")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("账号数据加载失败");
+    expect(screen.getByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getByText(/刷新失败 · 仍显示 .* 的结果/)).toBeVisible();
   });
 });

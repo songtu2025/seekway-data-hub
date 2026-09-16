@@ -6,8 +6,7 @@ from app.config import load_api_configs
 class DeliveryDetailQueryConfigTest(unittest.TestCase):
     def setUp(self):
         self.apis = {
-            api["api_code"]: api
-            for api in load_api_configs("config/api_config.example.yaml")
+            api["api_code"]: api for api in load_api_configs("config/api_config.example.yaml")
         }
 
     def test_delivery_detail_query_uses_one_real_delivery_code(self):
@@ -25,7 +24,7 @@ class DeliveryDetailQueryConfigTest(unittest.TestCase):
         )
         self.assertEqual(api["date_field"], "updateTime")
         self.assertTrue(api["sensitive_response"])
-        self.assertEqual(api["rate_limit"], {"sleep_seconds": 0.2})
+        self.assertEqual(api["rate_limit"], {"max_requests": 5, "period_seconds": 1})
         self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
         self.assertEqual(
             api["param_source"],

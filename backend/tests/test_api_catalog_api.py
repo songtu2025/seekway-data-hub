@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from sqlalchemy import insert, select
 
@@ -11,6 +13,45 @@ from backend.app.services.api_config_publish_service import publish_api_configs
 from backend.tests.conftest import AuthHarness
 from backend.tests.test_api_policies_api import create_active_account
 from backend.tests.test_auth_api import register_user
+
+
+def test_publication_rejects_rate_limit_not_matching_official_catalog(tmp_path) -> None:
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "apis": [
+                    {
+                        "api_url": "/example/page",
+                        "classification": "direct_read_candidate",
+                        "execution_stage": "configured_disabled",
+                        "rate_limit": {
+                            "max_requests": 1,
+                            "period_seconds": 5,
+                            "dimension": "接口维度",
+                        },
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="does not match official catalog"):
+        publication_records(
+            [
+                {
+                    "api_code": "example_page",
+                    "enabled": False,
+                    "platform_enabled": False,
+                    "method": "POST",
+                    "path": "/example/page",
+                    "rate_limit": {"max_requests": 2, "period_seconds": 1},
+                }
+            ],
+            catalog_path,
+        )
 
 
 def test_publication_rejects_unverified_platform_enabled_config(

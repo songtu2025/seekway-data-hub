@@ -5,6 +5,9 @@ import { Link, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import type { ApiCatalogItem, JijiaAccount, SyncJob, WorkerRuntime } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { RefreshStatus } from "./RefreshStatus";
+import { useVisiblePolling } from "../hooks/useVisiblePolling";
+import { useWorkerRuntime } from "../hooks/useWorkerRuntime";
 import { formatDate, getApiErrorMessage, statusLabel } from "../pages/m3Utils";
 
 const ACTIVE_JOB_STATUSES = new Set(["queued", "running", "pause_requested"]);
@@ -17,6 +20,7 @@ interface DataSyncPanelProps {
   selectedAccountId: string;
   loadedCount: number;
   onSynced: () => void;
+  preservePageOnSync?: boolean;
 }
 
 export function DataSyncPanel({
@@ -25,6 +29,7 @@ export function DataSyncPanel({
   selectedAccountId,
   loadedCount,
   onSynced,
+  preservePageOnSync = false,
 }: DataSyncPanelProps) {
   const location = useLocation();
   const sourceState = {
@@ -33,13 +38,16 @@ export function DataSyncPanel({
     returnState: location.state,
   };
   const { csrfToken, user } = useAuth();
-  const [runtime, setRuntime] = useState<WorkerRuntime | null>(null);
+  const { runtime } = useWorkerRuntime();
   const [catalogItem, setCatalogItem] = useState<ApiCatalogItem | null>(null);
   const [latestJob, setLatestJob] = useState<SyncJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
+  const [hasNewData, setHasNewData] = useState(false);
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const trackedJobIdRef = useRef<string | null>(null);
   const refreshedJobIdRef = useRef<string | null>(null);
   const requestGenerationRef = useRef(0);
@@ -61,13 +69,16 @@ export function DataSyncPanel({
   activeContextKeyRef.current = requestContextKey;
   const [stateContextKey, setStateContextKey] = useState(requestContextKey);
   const stateMatchesContext = stateContextKey === requestContextKey;
-  const currentRuntime = stateMatchesContext ? runtime : null;
+  const currentRuntime = runtime;
   const currentCatalogItem = stateMatchesContext ? catalogItem : null;
   const currentLatestJob = stateMatchesContext ? latestJob : null;
   const currentLoading = stateMatchesContext ? loading : true;
   const currentCreating = stateMatchesContext ? creating : false;
   const currentMessage = stateMatchesContext ? message : "";
+  const currentHasNewData = stateMatchesContext ? hasNewData : false;
   const currentError = stateMatchesContext ? error : "";
+  const currentRefreshing = stateMatchesContext ? refreshing : false;
+  const currentLastUpdatedAt = stateMatchesContext ? lastUpdatedAt : null;
   const activeJob =
     currentLatestJob && ACTIVE_JOB_STATUSES.has(currentLatestJob.status) ? currentLatestJob : null;
   const pollInterval = activeJob ? JOB_POLL_INTERVAL_MS : STATUS_POLL_INTERVAL_MS;
@@ -89,13 +100,15 @@ export function DataSyncPanel({
   useEffect(() => {
     requestGenerationRef.current += 1;
     setStateContextKey(requestContextKey);
-    setRuntime(null);
     setCatalogItem(null);
     setLatestJob(null);
     setLoading(true);
     setCreating(false);
     setMessage("");
+    setHasNewData(false);
     setError("");
+    setRefreshing(false);
+    setLastUpdatedAt(null);
     trackedJobIdRef.current = null;
     refreshedJobIdRef.current = null;
   }, [requestContextKey]);
@@ -108,10 +121,10 @@ export function DataSyncPanel({
         requestGenerationRef.current === requestGeneration &&
         activeContextKeyRef.current === contextKey;
       if (source === "manual") setLoading(true);
+      if (source === "auto") setRefreshing(true);
       try {
         const accountId = effectiveAccount?.id;
-        const [nextRuntime, catalog, jobs] = await Promise.all([
-          api.getWorkerRuntime(),
+        const [catalog, jobs] = await Promise.all([
           accountId ? api.getApiCatalog(accountId) : Promise.resolve([]),
           accountId
             ? api.listSyncJobs({ jijiaAccountId: accountId, apiCode, limit: 1 })
@@ -120,10 +133,10 @@ export function DataSyncPanel({
         const nextCatalogItem = catalog.find((item) => item.apiCode === apiCode) ?? null;
         const nextLatestJob = jobs.items[0] ?? null;
         if (!isCurrentRequest()) return;
-        setRuntime(nextRuntime);
         setCatalogItem(nextCatalogItem);
         setLatestJob(nextLatestJob);
         setError("");
+        setLastUpdatedAt(new Date());
 
         const trackedJobId = trackedJobIdRef.current;
         if (
@@ -134,35 +147,39 @@ export function DataSyncPanel({
           refreshedJobIdRef.current !== trackedJobId
         ) {
           refreshedJobIdRef.current = trackedJobId;
-          setMessage("同步完成，数据已刷新");
-          onSyncedRef.current();
+          if (preservePageOnSync) {
+            setMessage("同步完成，有新数据可查看");
+            setHasNewData(true);
+          } else {
+            setMessage("同步已完成，正在刷新数据");
+            setHasNewData(false);
+            onSyncedRef.current();
+          }
         }
       } catch (caught) {
         if (isCurrentRequest()) setError(getApiErrorMessage(caught, "同步状态加载失败"));
       } finally {
-        if (source === "manual" && isCurrentRequest()) setLoading(false);
+        if (isCurrentRequest()) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
-    [apiCode, effectiveAccount?.id, requestContextKey],
+    [apiCode, effectiveAccount?.id, preservePageOnSync, requestContextKey],
   );
 
   useEffect(() => {
-    let cancelled = false;
-    let timer: number | undefined;
-
-    const tick = async (source: "auto" | "manual") => {
-      await loadStatus(source);
-      if (cancelled) return;
-      timer = window.setTimeout(() => void tick("auto"), pollInterval);
-    };
-
-    void tick("manual");
+    if (document.visibilityState === "visible") void loadStatus("manual");
     return () => {
-      cancelled = true;
       requestGenerationRef.current += 1;
-      if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [loadStatus, pollInterval]);
+  }, [loadStatus]);
+
+  useVisiblePolling({
+    enabled: true,
+    intervalMs: pollInterval,
+    onPoll: () => loadStatus("auto"),
+  });
 
   async function createJob() {
     if (!canCreateJob || !effectiveAccount || !csrfToken) return;
@@ -170,6 +187,7 @@ export function DataSyncPanel({
     setCreating(true);
     setError("");
     setMessage("");
+    setHasNewData(false);
     try {
       const result = await api.createSyncJob(
         {
@@ -195,6 +213,12 @@ export function DataSyncPanel({
     } finally {
       if (activeContextKeyRef.current === contextKey) setCreating(false);
     }
+  }
+
+  function viewLatestData() {
+    setHasNewData(false);
+    setMessage("正在加载最新数据");
+    onSyncedRef.current();
   }
 
   function disabledReason(): string {
@@ -289,7 +313,17 @@ export function DataSyncPanel({
             )}
           </div>
           {currentMessage ? <Alert title={currentMessage} type="success" /> : null}
+          {currentHasNewData ? (
+            <Button type="link" onClick={viewLatestData}>
+              查看最新数据
+            </Button>
+          ) : null}
           {currentError ? <Alert title={currentError} type="error" /> : null}
+          <RefreshStatus
+            failedWithPreviousData={Boolean(currentError && currentLastUpdatedAt)}
+            lastUpdatedAt={currentLastUpdatedAt}
+            refreshing={currentRefreshing}
+          />
           {!currentLoading && disabledReason() && !activeJob ? (
             <small>{disabledReason()}</small>
           ) : null}

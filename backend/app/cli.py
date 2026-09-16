@@ -3,11 +3,14 @@ import json
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from importlib import import_module
+from typing import cast
 
 import requests
 from sqlalchemy import insert, select, update
+from sqlalchemy.engine import Engine
 
 from app.api_config_registry import load_published_api_config
+from app.api_rate_limiter import MySqlApiRateLimiter
 from app.auth import JijiaAuthClient, JijiaCredentials
 from app.config import load_settings
 from app.sale_return_discovery import discover_earliest_date
@@ -15,6 +18,7 @@ from backend.app.core.config import get_web_settings
 from backend.app.core.credentials import CredentialCipher
 from backend.app.core.database import SessionLocal
 from backend.app.core.errors import ApiError
+from backend.app.core.product import PRODUCT_NAME
 from backend.app.models.jijia_account import (
     CredentialSource,
     JijiaAccount,
@@ -66,6 +70,7 @@ def discover_sale_return_start(
 ) -> dict[str, object]:
     """使用 Web 账号的加密凭据只读定位退货单最早日期。"""
     web_settings = get_web_settings()
+    app_settings = load_settings()
     with SessionLocal() as db:
         account = db.get(JijiaAccount, account_id)
         if account is None:
@@ -84,13 +89,17 @@ def discover_sale_return_start(
         api = load_published_api_config(db, SALE_RETURN_API_CODE)
         if api is None:
             raise ApiError(409, "API_CONFIG_MISSING", "退货订单接口配置不存在")
+        rate_limiter = MySqlApiRateLimiter(
+            cast(Engine, db.get_bind()),
+            utilization=app_settings.jijia_rate_limit_utilization,
+        )
 
-    app_settings = load_settings()
     auth_client = JijiaAuthClient(
         app_settings,
         timeout_seconds=timeout_seconds,
         credentials=credentials,
         use_token_cache=False,
+        rate_limiter=rate_limiter,
     )
     token = auth_client.get_access_token(force_refresh=True)
     # 与 Worker 保持相同边界，避免 Web 类型检查接管旧同步客户端的历史债务。
@@ -99,13 +108,12 @@ def discover_sale_return_start(
         app_settings,
         timeout_seconds=timeout_seconds,
         auth_client=auth_client,
+        rate_limiter=rate_limiter,
     )
     result = discover_earliest_date(
-        api_client.request_url(api),
+        lambda params: api_client.request(api, token, params),
         start_date,
         end_date,
-        token.value,
-        timeout_seconds,
     )
     if save_backfill_start:
         save_result = _save_discovered_backfill_start(
@@ -216,7 +224,7 @@ def _save_discovered_backfill_start(
 
 def main(argv: Sequence[str] | None = None) -> None:
     """解析 Web 服务运维命令。"""
-    parser = argparse.ArgumentParser(description="积加数据同步 Web 服务运维命令")
+    parser = argparse.ArgumentParser(description=f"{PRODUCT_NAME}运维命令")
     subparsers = parser.add_subparsers(dest="command", required=True)
     bootstrap_parser = subparsers.add_parser("bootstrap-admin", help="创建首个管理员邀请")
     bootstrap_parser.add_argument("--email", required=True, help="管理员邮箱")

@@ -17,7 +17,7 @@ def create_active_account(harness: AuthHarness, monkeypatch) -> tuple[object, di
     ).json()["data"]
     monkeypatch.setattr(
         "backend.app.services.jijia_account_service.verify_account_credentials",
-        lambda app_id, app_key: None,
+        lambda app_id, app_key, **_kwargs: None,
     )
     verified = client.post(
         f"/api/v1/jijia-accounts/{created['id']}/verify",

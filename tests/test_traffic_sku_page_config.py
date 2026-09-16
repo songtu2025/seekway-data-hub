@@ -5,7 +5,9 @@ from app.config import load_api_configs
 
 class TrafficSkuPageConfigTest(unittest.TestCase):
     def setUp(self):
-        self.apis = {api["api_code"]: api for api in load_api_configs("config/api_config.example.yaml")}
+        self.apis = {
+            api["api_code"]: api for api in load_api_configs("config/api_config.example.yaml")
+        }
 
     def test_traffic_sku_page_uses_date_window_and_is_enabled(self):
         self.assertIn("traffic_sku_page", self.apis)
@@ -29,7 +31,7 @@ class TrafficSkuPageConfigTest(unittest.TestCase):
         self.assertEqual(api["date_window"]["end_field"], "endDate")
         self.assertEqual(api["date_window"]["default_start"], "2026-07-02")
         self.assertEqual(api["date_window"]["days"], 1)
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 65)
+        self.assertEqual(api["rate_limit"], {"max_requests": 1, "period_seconds": 1})
         self.assertEqual(api["params"]["currency"], "CNY")
         self.assertEqual(api["params"]["viewType"], "day")
         self.assertEqual(api["params"]["page"], 1)

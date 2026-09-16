@@ -56,7 +56,14 @@ def test_worker_runtime_transitions_and_stale_detection(harness: AuthHarness) ->
     with harness.session_factory() as db:
         start_worker_runtime(db, "worker-test", "instance-test")
         db.commit()
-        assert worker_runtime_data(db, harness.settings)["availability"] == "online"
+        online = worker_runtime_data(db, harness.settings)
+        assert online["availability"] == "online"
+        assert online["capacityStatus"] == "ready"
+        assert online["configuredWorkerCount"] == 1
+        assert online["onlineWorkerCount"] == 1
+        assert online["busyWorkerCount"] == 0
+        assert online["idleWorkerCount"] == 1
+        assert online["staleWorkerCount"] == 0
 
         touch_worker_runtime(
             db,
@@ -74,7 +81,11 @@ def test_worker_runtime_transitions_and_stale_detection(harness: AuthHarness) ->
         assert runtime is not None
         runtime.heartbeat_at = utc_now() - timedelta(seconds=91)
         db.commit()
-        assert worker_runtime_data(db, harness.settings)["availability"] == "offline"
+        stale = worker_runtime_data(db, harness.settings)
+        assert stale["availability"] == "offline"
+        assert stale["capacityStatus"] == "offline"
+        assert stale["onlineWorkerCount"] == 0
+        assert stale["staleWorkerCount"] == 1
 
 
 def test_sync_worker_updates_runtime_during_complete_queue_flow(
@@ -160,6 +171,7 @@ def test_lost_job_attempt_does_not_overwrite_worker_runtime(
 
 def test_worker_runtime_instances_are_isolated_and_aggregated(harness: AuthHarness) -> None:
     job_id = _queued_job(harness)
+    settings = harness.settings.model_copy(update={"worker_processes": 2})
     with harness.session_factory() as db:
         start_worker_runtime(db, "worker-a", "instance-a")
         start_worker_runtime(db, "worker-b", "instance-b")
@@ -173,14 +185,25 @@ def test_worker_runtime_instances_are_isolated_and_aggregated(harness: AuthHarne
             current_job_id=job_id,
         )
         db.commit()
-        assert worker_runtime_data(db, harness.settings)["availability"] == "online"
+        runtime = worker_runtime_data(db, settings)
+        assert runtime["availability"] == "online"
+        assert runtime["capacityStatus"] == "ready"
+        assert runtime["onlineWorkerCount"] == 2
+        assert runtime["busyWorkerCount"] == 1
+        assert runtime["idleWorkerCount"] == 1
 
         stop_worker_runtime(db, "worker-a", "instance-a")
         db.commit()
         worker_b = db.get(WorkerRuntime, "worker-b")
         assert worker_b is not None
         assert worker_b.status == "idle"
-        assert worker_runtime_data(db, harness.settings)["availability"] == "online"
+        runtime = worker_runtime_data(db, settings)
+        assert runtime["availability"] == "online"
+        assert runtime["capacityStatus"] == "degraded"
+        assert runtime["onlineWorkerCount"] == 1
+        assert runtime["busyWorkerCount"] == 0
+        assert runtime["idleWorkerCount"] == 1
+        assert runtime["staleWorkerCount"] == 0
 
 
 def test_restarted_worker_rejects_previous_instance_heartbeat(harness: AuthHarness) -> None:
@@ -233,6 +256,7 @@ def test_queued_job_detail_explains_worker_offline(harness: AuthHarness) -> None
 
 
 def test_worker_health_is_independent_from_api_readiness(harness: AuthHarness) -> None:
+    harness.settings.worker_processes = 2
     assert harness.client.get("/health/ready").status_code == 200
     offline = harness.client.get("/health/worker")
     assert offline.status_code == 503
@@ -244,4 +268,20 @@ def test_worker_health_is_independent_from_api_readiness(harness: AuthHarness) -
 
     online = harness.client.get("/health/worker")
     assert online.status_code == 200
-    assert online.json()["data"] == {"status": "online"}
+    assert online.json()["data"] == {
+        "status": "degraded",
+        "configuredWorkerCount": 2,
+        "onlineWorkerCount": 1,
+        "busyWorkerCount": 0,
+        "idleWorkerCount": 1,
+        "staleWorkerCount": 0,
+    }
+
+    with harness.session_factory() as db:
+        start_worker_runtime(db, "worker-health-2", "instance-health-2")
+        db.commit()
+
+    ready = harness.client.get("/health/worker")
+    assert ready.status_code == 200
+    assert ready.json()["data"]["status"] == "online"
+    assert ready.json()["data"]["onlineWorkerCount"] == 2

@@ -24,7 +24,7 @@ class FinancialAnalysisMonthV2QueryConfigTest(unittest.TestCase):
         self.assertNotIn("list_field", page)
         self.assertNotIn("total_field", page)
 
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 2)
+        self.assertEqual(api["rate_limit"], {"max_requests": 1, "period_seconds": 1})
         self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
         self.assertEqual(
             api["params"],

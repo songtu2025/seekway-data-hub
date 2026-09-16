@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from backend.app import cli
 from backend.app.core.credentials import CredentialCipher
 from backend.app.core.errors import ApiError
+from backend.app.core.product import PRODUCT_NAME
 from backend.app.models import (
     AppUser,
     AuditLog,
@@ -23,6 +24,14 @@ from backend.app.models import (
 from backend.app.models.sync_records import sync_checkpoint_table, sync_records_metadata
 from backend.app.services.mail_service import FakeMailSender
 from backend.tests.conftest import AuthHarness
+
+
+def test_cli_help_uses_product_name(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(["--help"])
+
+    assert error.value.code == 0
+    assert PRODUCT_NAME in capsys.readouterr().out
 
 
 def test_bootstrap_admin_only_creates_first_invitation(
@@ -140,7 +149,11 @@ def test_discover_sale_return_start_uses_selected_web_account_credentials(
             api_config_path=Path("config/api_config.example.yaml"),
         ),
     )
-    monkeypatch.setattr(cli, "load_settings", lambda: object())
+    monkeypatch.setattr(
+        cli,
+        "load_settings",
+        lambda: SimpleNamespace(jijia_rate_limit_utilization=0.9),
+    )
     monkeypatch.setattr(
         cli,
         "load_published_api_config",

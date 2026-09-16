@@ -1,13 +1,13 @@
-# jijia-polardb-sync
+# SEEKWAY Data Hub
 
-这是公司内部使用的积加数据同步管理平台。平台通过 Web 管理积加账号、接口策略、定时任务、运行记录和数据查询，并由 Scheduler、数据库任务队列和单 Worker 将积加开放平台数据同步到 PolarDB MySQL。
+SEEKWAY Data Hub（SEEKWAY 数据接入中心）是公司内部的数据接入管理平台。积加是首个数据源连接器；平台通过 Web 管理账号、接口策略、定时任务、运行记录和数据查询，并由 Scheduler、数据库任务队列和多个 Worker 将积加开放平台数据同步到 PolarDB MySQL。
 
 ## 项目定位与阶段
 
 项目按两个宏观阶段演进：
 
 1. **积加 API 同步工具（历史基础）**：最初通过 CLI 和 cron 调用积加 API，形成了鉴权、分页、限流、重试、原始数据落库、日志和 checkpoint 等同步能力。该阶段不再是最终产品和生产日常入口。
-2. **积加数据同步管理平台（当前且唯一目标）**：在第一阶段同步能力之上增加多账号、数据库接口目录、账号级策略、Web Scheduler、任务队列、Worker、权限、审计和运行追踪。生产同步最终只允许通过平台发起。
+2. **SEEKWAY 数据接入中心（当前且唯一目标）**：在第一阶段同步能力之上增加多账号、数据库接口目录、账号级策略、Web Scheduler、任务队列、Worker、权限、审计和运行追踪。积加作为首个数据源连接器，生产同步最终只允许通过平台发起。
 
 第一阶段的 `app/` 继续作为平台内部同步内核，并暂时保留受控的配置校验、连接检查、只读探测、迁移和故障诊断命令；`--sync-enabled` 与 legacy cron 必须在平台完成割接后退出生产日常运行。第二阶段内部仍使用 M1～M4 描述“可登录、可配置、可同步、发布准备”，它们不是新的宏观产品阶段。
 
@@ -41,7 +41,7 @@ V1.8.1 的[登录页模板](https://github.com/songtu2025/seekway-codex-standard
 ## 目录结构
 
 ```text
-jijia-polardb-sync/
+seekway-data-hub/
   app/
     main.py
     config.py
@@ -92,6 +92,9 @@ jijia-polardb-sync/
 | `MAIL_PROVIDER`、`SMTP_*` | 邮件适配器与生产 SMTP 参数；生产不能使用 console/fake |
 | `CREDENTIAL_ENCRYPTION_KEY` | 积加账号凭证加密密钥，必须独立生成、保管和轮换 |
 | `WORKER_POLL_SECONDS`、`WORKER_HEARTBEAT_SECONDS`、`WORKER_STALE_MINUTES` | Worker 轮询、心跳与失联判定参数 |
+| `WORKER_PROCESSES`、`SYNC_LOCK_SCOPE` | Worker 进程总数与同步互斥范围；多账号并发使用 `4` 和 `account` |
+| `JIJIA_RATE_LIMIT_UTILIZATION` | 官方单接口限额的使用率，默认保留 10% 余量 |
+| `JIJIA_TOKEN_RATE_LIMIT_REQUESTS`、`JIJIA_TOKEN_RATE_LIMIT_PERIOD_SECONDS` | 官方 accessToken 接口限额，当前为每秒 10 次 |
 
 `.env.example` 是主要运行变量的示例清单。legacy CLI、Web API 和 Worker 共用最小权限
 运行 `.env`；受控迁移只读取独立的 `.env.migration`，不能把迁移高权限凭据配置给
@@ -116,16 +119,18 @@ mysql -h <POLARDB_HOST> -P 3306 -u <DB_USER> -p <DB_NAME> < sql/init_tables.sql
 
 其中 `raw_api_data.raw_json` 使用 MySQL `JSON` 类型，用来保存原始 API 返回。
 
-已有数据库升级时，由部署负责人先执行
-`sql/migrations/0004_api_config_runtime.sql`，再执行
+已有数据库升级时，由部署负责人按下文顺序执行同步域增量 SQL（包含
+`sql/migrations/0008_api_rate_limit_state.sql`），再执行
 `python -m alembic -c backend/alembic.ini upgrade head`。前者只扩展同步核心的
-`api_config`，后者只增加 Web 任务的配置快照字段；应用不会自动执行生产迁移。
+表结构，后者只管理 Web 身份域和已确认的 Web 增量表；应用不会自动执行生产迁移。
 
 ## API 配置
 
 `api_config` 数据库表是 Web、调度器、Worker 和 legacy CLI 的唯一运行时接口配置源。
 `config/api_config.example.yaml` 只用于开发、评审和受控发布；
 `config/jijia_api_catalog.generated.json` 保存官方文档证据。运行时不会在数据库读取失败时回退到 YAML。
+发布时会校验每个已收录接口的 `rate_limit` 与官方目录一致；多个本地 `api_code`
+只要指向同一 HTTP 方法和路径，就共享 `api_rate_limit_state` 中的同一限流时间线。
 
 登录 Web 后打开 `/api-catalog` 的“接口中心”，可以查看：
 
@@ -274,7 +279,7 @@ python -m app.doc_catalog --review-config config/api_review_overrides.yaml --out
 第一阶段曾使用以下 cron 执行批量同步，仅作为历史示例保留：
 
 ```cron
-0 2 * * * cd /path/to/jijia-polardb-sync && /path/to/.venv/bin/python -m app.main --sync-enabled >> logs/cron.log 2>&1
+0 2 * * * cd /path/to/seekway-data-hub && /path/to/.venv/bin/python -m app.main --sync-enabled >> logs/cron.log 2>&1
 ```
 
 最终生产环境禁止通过该 cron 执行日常同步。平台割接期间可以暂时保留尚未迁移接口的 legacy 调度，但必须逐账号、逐 API 建立归属清单，并在启用对应 Web 策略前先停止 legacy 调度。
@@ -432,8 +437,8 @@ Web 管理服务独立位于 `backend/` 和 `frontend/`。当前支持受邀注�
 不允许在网页直接修改路径、分页或安全分类等底层配置。
 
 Windows PowerShell 本地完整系统启动。API 固定监听 `127.0.0.1:8004`，Web 使用 `5183`
-端口并默认监听 `127.0.0.1`；`dev-local.ps1` 会同时启动 API、常驻 Worker 和 Web，任一
-进程退出时会停止其余进程：
+端口并默认监听 `127.0.0.1`；`dev-local.ps1` 会同时启动 API、唯一 Scheduler、指定数量的
+常驻 Worker 和 Web，任一进程退出时会停止其余进程：
 
 ```powershell
 .\scripts\setup.ps1
@@ -441,7 +446,7 @@ Windows PowerShell 本地完整系统启动。API 固定监听 `127.0.0.1:8004`�
 .\scripts\setup-local-test.ps1
 .\.venv\Scripts\python.exe -m dotenv -f .env.localtest run --override -- `
   ".\.venv\Scripts\python.exe" -m backend.app.cli bootstrap-admin --email admin@example.com
-.\scripts\dev-local.ps1
+.\scripts\dev-local.ps1 -WorkerProcesses 4
 ```
 
 `setup-local-test.ps1` 只需在首次使用固定本地隔离库时运行；它要求 `.env` 指向本机
@@ -449,6 +454,15 @@ Windows PowerShell 本地完整系统启动。API 固定监听 `127.0.0.1:8004`�
 `.env.localtest`。
 `dev-local.ps1` 启动的 Worker 会处理该隔离库中的排队任务；本地库存在有效账号凭据和排队任务时，
 任务仍会调用真实积加 API。
+
+隔离库队列为空、API 已单独运行在 `8004` 且没有其他 Worker 在线时，可以重复执行本地
+冷启动门禁。`canary` 按 1→2→4 启动，`burst` 同时启动四个 Worker；两种模式都不启动
+Scheduler，并在每轮结束后清理测试进程：
+
+```powershell
+.\scripts\worker-cold-start-canary.ps1 -Rounds 10 -Mode canary
+.\scripts\worker-cold-start-canary.ps1 -Rounds 10 -Mode burst
+```
 
 本地 `MAIL_PROVIDER=console` 时，邀请地址只输出到执行邀请操作的进程终端；生产环境必须配置 SMTP、HTTPS、`SESSION_COOKIE_SECURE=true` 和带 `__Host-` 前缀的 Cookie 名。`0001` 只创建 `app_user`、`auth_action_token`、`user_session`，生产迁移必须由部署负责人执行。
 
@@ -555,14 +569,16 @@ M3 既有同步表升级前，只能对已经获准只读扫描的隔离 MySQL/P
 4. `0005_raw_query_indexes.sql`
 5. `0006_sale_return_created_index.sql`
 6. `0007_raw_api_data_stat.sql`
+7. `0008_api_rate_limit_state.sql`
 
 两个 `0004` 分属不同能力，不能只按编号排序或漏执行。`0003`、`0007` 使用仓库受控入口；
-`0004` 至 `0006` 当前由部署负责人按上述顺序人工执行，不进入服务自动启动流程。
+`0004` 至 `0006` 以及 `0008` 当前由部署负责人按上述顺序人工执行，不进入服务自动启动流程。
 
 Web API 提供两个公开健康检查：`GET /health/live` 只证明进程存活；
 `GET /health/ready` 在生产会检查运行数据库可连接且实例未处于全局只读状态，数据库
 不可用或只读时返回脱敏 503，供 ECS/Nginx 决定是否导流。该只读查询不证明运行账号
-拥有 DML 权限，真实权限仍须在隔离副本和 ECS 发布演练中验证。M3 Worker 已使用数据库队列和单执行器实现；
+拥有 DML 权限，真实权限仍须在隔离副本和 ECS 发布演练中验证。M3 Worker 已使用数据库队列、
+`SKIP LOCKED` 多执行器领取和数据库共享的单接口限流实现；
 密码重置已实现，Redis、Celery 和第三方登录继续不属于当前 MVP。
 
 任务详情中的批次号可直接进入对应运行详情和日志。原始数据列表支持按
@@ -575,24 +591,31 @@ Web API 提供两个公开健康检查：`GET /health/live` 只证明进程存�
 
 Web 第一版直接使用 ECS 上的 systemd、Nginx 和静态前端产物，不使用 Docker。仓库提供：
 
-- `config/ecs/jijia-api.service.example`：FastAPI，仅监听 `127.0.0.1:8000`。
-- `config/ecs/jijia-scheduler.service.example`：唯一 Scheduler，使用 `flock` 防止重复实例。
-- `config/ecs/jijia-worker@.service.example`：Worker 模板；当前只启用 `jijia-worker@worker-1`。
+- `config/ecs/seekway-datahub-api.service.example`：FastAPI，仅监听 `127.0.0.1:8000`。
+- `config/ecs/seekway-datahub-scheduler.service.example`：唯一 Scheduler，使用 `flock` 防止重复实例。
+- `config/ecs/seekway-datahub-worker@.service.example`：单 Worker 模板；生产启用 `worker-1` 至 `worker-4` 四个实例。
 - `config/ecs/nginx.conf.example`：TLS、SPA 静态资源、API/健康检查代理和登录限流。
 
-生产运行凭据放在仅服务用户可读的 `.env`；迁移高权限凭据单独放在 `.env.migration`，
+生产运行凭据放在仅服务用户可读的 `/etc/seekway-data-hub.env`；迁移高权限凭据单独存放，
 只能由获批迁移命令读取，不能配置到 API、Scheduler 或 Worker 的 `EnvironmentFile`。两个文件都不得提交。
-三个 systemd 模板替换占位符后，分别安装为 `/etc/systemd/system/jijia-api.service`、
-`/etc/systemd/system/jijia-scheduler.service` 和
-`/etc/systemd/system/jijia-worker@.service`；Worker 模板中的 `__WORKER_PROCESSES__` 当前固定替换为 `1`。
+三个 systemd 模板替换占位符后，分别安装为 `/etc/systemd/system/seekway-datahub-api.service`、
+`/etc/systemd/system/seekway-datahub-scheduler.service` 和
+`/etc/systemd/system/seekway-datahub-worker@.service`；Worker 模板中的 `__WORKER_PROCESSES__` 替换为 `4`，
+该值声明全部 Worker 实例数并参与连接预算校验，不会让单个 unit 自行派生子进程。
+运行环境同时设置 `PUBLIC_WEB_URL=https://datahub.seekwaygroup.com`、`SESSION_COOKIE_SECURE=true`、
+`SYNC_LOCK_SCOPE=account`、`DB_POOL_SIZE=3`、`DB_MAX_OVERFLOW=2`。
 
 发布负责人在 ECS 上替换模板中的双下划线占位符后，按以下最短链路验证：
 
 ```bash
-cd /path/to/jijia-polardb-sync
+cd /opt/seekway-data-hub
 python3 -m venv .venv
 ./.venv/bin/python -m pip install -r requirements.txt
 cd frontend && npm ci && npm run build && cd ..
+
+# 只读枚举可能遗留的旧 unit；任一命令有输出时停止发布并先完成旧服务迁移。
+systemctl list-unit-files 'jijia-*' --no-legend
+systemctl list-units 'jijia-*' --all --no-legend
 
 # 只执行生产配置、已发布接口和运行库 SELECT 检查，不执行迁移或业务 API。
 # 只有 API 范围检查前端产物，Scheduler 和 Worker 不依赖 frontend/dist。
@@ -600,51 +623,80 @@ cd frontend && npm ci && npm run build && cd ..
 ./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service scheduler
 ./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service worker
 
-sudo systemd-analyze verify /etc/systemd/system/jijia-api.service
-sudo systemd-analyze verify /etc/systemd/system/jijia-scheduler.service
-sudo systemd-analyze verify /etc/systemd/system/jijia-worker@.service
+sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-api.service
+sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-scheduler.service
+sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-worker@.service
 sudo nginx -t
 sudo systemctl daemon-reload
-sudo systemctl enable jijia-api jijia-scheduler jijia-worker@worker-1 nginx
+sudo systemctl disable --now seekway-datahub-scheduler
+sudo systemctl enable seekway-datahub-api seekway-datahub-worker@worker-1 nginx
 
-# 先确认 API 与数据库就绪，再启动任务生成器和唯一 Worker，最后对外提供服务。
-sudo systemctl start jijia-api
+# 第一阶段：先确认 API 与数据库就绪，再启动 worker-1；Scheduler 保持关闭。
+sudo systemctl start seekway-datahub-api
 curl --fail http://127.0.0.1:8000/health/ready
-sudo systemctl start jijia-scheduler jijia-worker@worker-1
-curl --fail http://127.0.0.1:8000/health/worker
+sudo systemctl start seekway-datahub-worker@worker-1
+curl --fail --silent http://127.0.0.1:8000/health/worker | ./.venv/bin/python -c \
+  'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 1), data'
 sudo systemctl reload-or-restart nginx
 
-systemctl is-active jijia-api jijia-scheduler jijia-worker@worker-1 nginx
-curl --fail https://sync.example.com/health/ready
-curl --fail https://sync.example.com/health/worker
+# 第二阶段：worker-1 验收通过后扩至两个 Worker。
+sudo systemctl start seekway-datahub-worker@worker-2
+curl --fail --silent http://127.0.0.1:8000/health/worker | ./.venv/bin/python -c \
+  'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 2), data'
+systemctl is-active seekway-datahub-api seekway-datahub-worker@worker-{1..2} nginx
+
+# 第三阶段：两个 Worker 验收通过后扩至四个 Worker。
+sudo systemctl start seekway-datahub-worker@worker-{3..4}
+curl --fail --silent http://127.0.0.1:8000/health/worker | ./.venv/bin/python -c \
+  'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 4), data'
+systemctl is-active seekway-datahub-api seekway-datahub-worker@worker-{1..4} nginx
+
+# 四个 Worker 验收通过后，才允许把 worker-2 至 worker-4 设为开机自启。
+sudo systemctl enable seekway-datahub-worker@worker-{2..4}
+curl --fail https://datahub.seekwaygroup.com/health/ready
+curl --fail https://datahub.seekwaygroup.com/health/worker
 ```
+
+以上两条旧 unit 检查只读取 systemd 状态，不自动停止或删除服务。发现旧 API、Scheduler 或 Worker 时，
+必须停止本次发布，核对任务所有权并另行批准迁移；旧 Scheduler 未退出前禁止启动新 Scheduler。
+
+上述金丝雀阶段始终保持 Scheduler 关闭。只有完成 legacy 调度归属清单、确认目标策略没有其他
+调度所有者并取得单独授权后，才允许执行 `sudo systemctl enable --now seekway-datahub-scheduler`；
+先观察一个策略的两个完整周期，再逐项扩大。
 
 `release_preflight` 通过只代表当前生产配置、YAML、数据库中的已发布接口和运行数据库目标符合启动条件；
 API 范围还要求前端产物完整。它不代表批准迁移或部署。
 `0003` 仍必须先在隔离副本完成演练，并由部署负责人单独授权。
-当前只运行一个 `jijia-worker@worker-1`，不得额外启用其他 Worker 实例。
+默认运行 `seekway-datahub-worker@worker-1` 至 `seekway-datahub-worker@worker-4` 四个独立 systemd 实例。
+同账号仍由账号锁串行；不同账号可并发。所有账号、进程和服务对相同接口共享数据库限流器，
+HTTP 401 重试和 429 冷却也进入同一时间线。扩容前必须按
+`(API 进程数 + Scheduler 进程数 + Worker 子进程数) × (DB_POOL_SIZE + DB_MAX_OVERFLOW)`
+核对数据库连接预算，并严格按 1→2→4 扩容。每一阶段必须同时满足健康计数准确、队列能够回落，
+且 journald 没有新增 429、数据库连接异常或任务所有权异常，才允许进入下一阶段；失败时停止本阶段新增 Worker，
+回到上一稳定档位。
 服务日志统一进入 journald：
 
 ```bash
-journalctl -u jijia-api -u jijia-scheduler -u jijia-worker@worker-1 --since "2 hours ago"
+journalctl -u seekway-datahub-api -u seekway-datahub-scheduler -u 'seekway-datahub-worker@worker-*' --since "2 hours ago"
 ```
 
 应用或 unit 回滚时先停止领取和生成新任务，恢复上一版本应用、前端产物、运行 `.env` 和 unit 文件后，
 按同一顺序重新验证；本流程不执行 Alembic downgrade，也不替代已批准的数据库恢复方案：
 
 ```bash
-sudo systemctl stop jijia-worker@worker-1 jijia-scheduler jijia-api
+sudo systemctl stop seekway-datahub-worker@worker-{1..4} seekway-datahub-scheduler seekway-datahub-api
 # 恢复上一版本应用、frontend/dist、运行 .env 和三个 systemd unit。
+sudo systemctl disable seekway-datahub-worker@worker-{2..4}
 sudo systemctl daemon-reload
-sudo systemctl start jijia-api
+sudo systemctl start seekway-datahub-api
 curl --fail http://127.0.0.1:8000/health/ready
-sudo systemctl start jijia-scheduler jijia-worker@worker-1
+sudo systemctl start seekway-datahub-worker@worker-1
 curl --fail http://127.0.0.1:8000/health/worker
 sudo nginx -t
 sudo systemctl reload-or-restart nginx
-systemctl is-active jijia-api jijia-scheduler jijia-worker@worker-1 nginx
-curl --fail https://sync.example.com/health/ready
-curl --fail https://sync.example.com/health/worker
+systemctl is-active seekway-datahub-api seekway-datahub-worker@worker-1 nginx
+curl --fail https://datahub.seekwaygroup.com/health/ready
+curl --fail https://datahub.seekwaygroup.com/health/worker
 ```
 
 Worker 收到停止信号后不再领取新任务，并给当前长任务最多 3 小时完成。

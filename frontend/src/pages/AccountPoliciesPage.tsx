@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Button, Empty, Input, Select, Spin } from "antd";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 
@@ -6,6 +6,7 @@ import { api, ApiError } from "../api/client";
 import type { ApiPolicy, ApiPolicyUpdateInput, JijiaAccountStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { buildPolicyUpdate, MAX_BATCH_POLICIES } from "../policyUtils";
 import { businessDomainLabel } from "../businessDomains";
 import { getReturnNavigation } from "./m3Utils";
@@ -57,58 +58,121 @@ function AccountPoliciesContent() {
   const [domain, setDomain] = useState("");
   const [filter, setFilter] = useState<PolicyFilter>("enabled");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [accountLoadError, setAccountLoadError] = useState("");
+  const [policiesLoadError, setPoliciesLoadError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(routeNotice);
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(() => new Set());
-  const [reload, setReload] = useState(0);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const routeAccountIdRef = useRef(accountId);
   const requestGenerationRef = useRef(0);
+  const inFlightGenerationRef = useRef<number | null>(null);
   routeAccountIdRef.current = accountId;
 
+  const loadData = useCallback(
+    async (source: "initial" | "manual") => {
+      if (inFlightGenerationRef.current !== null) return;
+      const generation = ++requestGenerationRef.current;
+      inFlightGenerationRef.current = generation;
+      if (source === "initial") setLoading(true);
+      else setRefreshing(true);
+      setAccountLoadError("");
+      setPoliciesLoadError("");
+      setError("");
+      if (source === "manual") setNotice("");
+
+      const [accountResult, policiesResult] = await Promise.allSettled([
+        api.getAccount(accountId),
+        api.listPolicies(accountId),
+      ]);
+      if (requestGenerationRef.current !== generation || routeAccountIdRef.current !== accountId)
+        return;
+
+      if (accountResult.status === "fulfilled") {
+        setAccountName(accountResult.value.name);
+        setAccountStatus(accountResult.value.status);
+      } else {
+        setAccountLoadError(
+          accountResult.reason instanceof ApiError
+            ? accountResult.reason.message
+            : "账号信息加载失败",
+        );
+      }
+
+      if (policiesResult.status === "fulfilled") {
+        const rows = policiesResult.value;
+        setPolicies(rows);
+        if (source === "initial") {
+          const initialFilter =
+            !requestedApiCode && rows.some((policy) => policy.enabled) ? "enabled" : "all";
+          setFilter(initialFilter);
+          setSearch(requestedApiCode);
+          setDomain("");
+          setSelectedCode(
+            requestedApiCode || (rows.find((policy) => policy.enabled) ?? rows[0])?.apiCode || null,
+          );
+          setSelectedCodes(new Set());
+        } else {
+          setSelectedCode((current) =>
+            current && rows.some((policy) => policy.apiCode === current)
+              ? current
+              : ((rows.find((policy) => policy.enabled) ?? rows[0])?.apiCode ?? null),
+          );
+          setSelectedCodes(
+            (current) =>
+              new Set(
+                [...current].filter((apiCode) =>
+                  rows.some((policy) => policy.apiCode === apiCode && policy.catalogEnabled),
+                ),
+              ),
+          );
+        }
+      } else {
+        setPoliciesLoadError(
+          policiesResult.reason instanceof ApiError
+            ? policiesResult.reason.message
+            : "接口策略加载失败",
+        );
+      }
+
+      if (accountResult.status === "fulfilled" && policiesResult.status === "fulfilled") {
+        setLastCheckedAt(new Date());
+      }
+      setLoading(false);
+      setRefreshing(false);
+      if (inFlightGenerationRef.current === generation) inFlightGenerationRef.current = null;
+    },
+    [accountId, requestedApiCode],
+  );
+
   useEffect(() => {
-    const generation = ++requestGenerationRef.current;
     setStateAccountId(accountId);
     setAccountName("");
     setAccountStatus(null);
     setPolicies([]);
     setSelectedCode(null);
     setLoading(true);
+    setRefreshing(false);
+    setLastCheckedAt(null);
+    setAccountLoadError("");
+    setPoliciesLoadError("");
     setError("");
     setNotice(routeNotice);
     setSelectedCodes(new Set());
     setSearch("");
     setDomain("");
     setBulkBusy(false);
-    Promise.all([api.getAccount(accountId), api.listPolicies(accountId)])
-      .then(([account, rows]) => {
-        if (requestGenerationRef.current !== generation || routeAccountIdRef.current !== accountId)
-          return;
-        const initialFilter =
-          !requestedApiCode && rows.some((policy) => policy.enabled) ? "enabled" : "all";
-        setAccountName(account.name);
-        setAccountStatus(account.status);
-        setPolicies(rows);
-        setFilter(initialFilter);
-        setSearch(requestedApiCode);
-        setSelectedCode(
-          requestedApiCode || (rows.find((policy) => policy.enabled) ?? rows[0])?.apiCode || null,
-        );
-      })
-      .catch((caught) => {
-        if (requestGenerationRef.current === generation && routeAccountIdRef.current === accountId)
-          setError(caught instanceof ApiError ? caught.message : "接口策略加载失败");
-      })
-      .finally(() => {
-        if (requestGenerationRef.current === generation && routeAccountIdRef.current === accountId)
-          setLoading(false);
-      });
+    setSaving(false);
+    inFlightGenerationRef.current = null;
+    void loadData("initial");
     return () => {
-      if (requestGenerationRef.current === generation) {
-        requestGenerationRef.current += 1;
-      }
+      requestGenerationRef.current += 1;
+      inFlightGenerationRef.current = null;
     };
-  }, [accountId, routeNotice, reload, requestedApiCode]);
+  }, [accountId, loadData, routeNotice]);
 
   const stateMatchesRoute = stateAccountId === accountId;
   const currentPolicies = stateMatchesRoute ? policies : [];
@@ -157,9 +221,12 @@ function AccountPoliciesContent() {
   const hiddenSelectionCount = selectedPolicies.filter(
     (policy) => !filtered.includes(policy),
   ).length;
+  const pageBusy = bulkBusy || saving || refreshing;
+  const loadError = [accountLoadError, policiesLoadError].filter(Boolean).join("；");
+  const hasPreviousData = stateMatchesRoute && Boolean(accountName || currentPolicies.length);
 
   async function applyBulk(enabled: boolean) {
-    if (!csrfToken || !canEdit || bulkBusy || selectedCodes.size === 0) return;
+    if (!csrfToken || !canEdit || pageBusy || selectedCodes.size === 0) return;
     if (selectedCodes.size > MAX_BATCH_POLICIES) {
       setError("一次最多设置 100 个接口，请减少选择后保存。");
       return;
@@ -196,10 +263,11 @@ function AccountPoliciesContent() {
   }
 
   async function savePolicy(input: ApiPolicyUpdateInput) {
-    if (!selected || !csrfToken) return;
+    if (!selected || !csrfToken || pageBusy) return;
     const targetAccountId = accountId;
     const targetApiCode = selected.apiCode;
     const generation = requestGenerationRef.current;
+    setSaving(true);
     setError("");
     setNotice("");
     try {
@@ -220,6 +288,12 @@ function AccountPoliciesContent() {
       )
         return;
       setError(caught instanceof ApiError ? caught.message : "策略保存失败");
+    } finally {
+      if (
+        requestGenerationRef.current === generation &&
+        routeAccountIdRef.current === targetAccountId
+      )
+        setSaving(false);
     }
   }
 
@@ -231,13 +305,28 @@ function AccountPoliciesContent() {
             <small>接入管理 / {stateMatchesRoute && accountName ? accountName : "账号概览"}</small>
             <h1>同步接口</h1>
           </div>
-          <Link
-            className="action-link action-link--neutral"
-            to={returnNavigation.path}
-            state={returnNavigation.state}
-          >
-            {returnNavigation.label}
-          </Link>
+          <div className="m3-refresh-controls">
+            <RefreshStatus
+              failedWithPreviousData={Boolean(loadError && lastCheckedAt)}
+              lastUpdatedAt={lastCheckedAt}
+              refreshing={refreshing}
+            />
+            <Button
+              aria-label="刷新同步接口"
+              disabled={loading || pageBusy}
+              loading={refreshing}
+              onClick={() => void loadData("manual")}
+            >
+              刷新同步接口
+            </Button>
+            <Link
+              className="action-link action-link--neutral"
+              to={returnNavigation.path}
+              state={returnNavigation.state}
+            >
+              {returnNavigation.label}
+            </Link>
+          </div>
         </header>
         <nav aria-label="账号管理导航" className="account-workspace-nav">
           <Link to={`/accounts/${accountId}`}>账号概览</Link>
@@ -252,7 +341,7 @@ function AccountPoliciesContent() {
         <section aria-label="同步接口筛选" className="policy-summary">
           {summaryItems.map((item) => (
             <Button
-              disabled={bulkBusy}
+              disabled={pageBusy}
               aria-label={`${item.label} ${item.count}`}
               aria-pressed={filter === item.filter}
               className={filter === item.filter ? "active" : ""}
@@ -267,14 +356,14 @@ function AccountPoliciesContent() {
         </section>
         <section className="policy-toolbar">
           <Input.Search
-            disabled={bulkBusy}
+            disabled={pageBusy}
             aria-label="搜索同步接口"
             placeholder="搜索接口名称或 API code"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
           <Select
-            disabled={bulkBusy}
+            disabled={pageBusy}
             aria-label="按业务域筛选"
             options={[
               { label: "全部业务域", value: "" },
@@ -291,7 +380,7 @@ function AccountPoliciesContent() {
             <Button
               className="text-button"
               type="text"
-              disabled={bulkBusy}
+              disabled={pageBusy}
               onClick={() =>
                 setSelectedCodes(
                   (current) =>
@@ -318,7 +407,7 @@ function AccountPoliciesContent() {
               <span>其中 {hiddenSelectionCount} 个被当前筛选隐藏</span>
             ) : null}
             <Button
-              disabled={bulkBusy}
+              disabled={pageBusy}
               className="text-button"
               type="text"
               onClick={() => setSelectedCodes(new Set())}
@@ -335,7 +424,7 @@ function AccountPoliciesContent() {
             </p>
             <Button
               disabled={
-                bulkBusy || selectedCodes.size === 0 || selectedCodes.size > MAX_BATCH_POLICIES
+                pageBusy || selectedCodes.size === 0 || selectedCodes.size > MAX_BATCH_POLICIES
               }
               loading={bulkBusy}
               type="primary"
@@ -345,7 +434,7 @@ function AccountPoliciesContent() {
             </Button>
             <Button
               disabled={
-                bulkBusy || selectedCodes.size === 0 || selectedCodes.size > MAX_BATCH_POLICIES
+                pageBusy || selectedCodes.size === 0 || selectedCodes.size > MAX_BATCH_POLICIES
               }
               onClick={() => void applyBulk(false)}
             >
@@ -356,19 +445,22 @@ function AccountPoliciesContent() {
         {notice ? (
           <Alert className="page-success" role="status" title={notice} type="success" />
         ) : null}
-        {error ? (
+        {loadError ? (
           <Alert
             className="page-alert"
             showIcon
-            title={error}
-            type="error"
+            title={loadError}
+            type={hasPreviousData ? "warning" : "error"}
             action={
               currentPolicies.length === 0 ? (
-                <Button onClick={() => setReload((current) => current + 1)}>重新加载</Button>
+                <Button disabled={loading} onClick={() => void loadData("initial")}>
+                  重新加载
+                </Button>
               ) : undefined
             }
           />
         ) : null}
+        {error ? <Alert className="page-alert" showIcon title={error} type="error" /> : null}
         {canEdit &&
         !loading &&
         stateMatchesRoute &&
@@ -407,7 +499,7 @@ function AccountPoliciesContent() {
                 <Spin description="正在加载接口策略…" />
               </div>
             ) : null}
-            {!loading && !error && stateMatchesRoute && filtered.length === 0 ? (
+            {!loading && !loadError && !error && stateMatchesRoute && filtered.length === 0 ? (
               <Empty
                 className="empty-state"
                 description={
@@ -422,7 +514,7 @@ function AccountPoliciesContent() {
                 accountId={accountId}
                 accountStatus={accountStatus}
                 canEdit={canEdit}
-                busy={bulkBusy}
+                busy={pageBusy}
                 domainName={domainName}
                 initiallyOpen={
                   filter !== "all" || Boolean(search || domain) || rows.some((row) => row.enabled)

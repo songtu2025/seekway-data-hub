@@ -23,7 +23,7 @@ class FinancialAnalysisColumnsQueryConfigTest(unittest.TestCase):
         self.assertEqual(page["list_field"], "data")
         self.assertNotIn("total_field", page)
 
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 0.5)
+        self.assertEqual(api["rate_limit"], {"max_requests": 3, "period_seconds": 1})
         self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
         self.assertEqual(api["params"], {"dimension": "market"})
 

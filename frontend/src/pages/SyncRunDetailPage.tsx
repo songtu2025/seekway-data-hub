@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Button, Empty, Spin, Tag } from "antd";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { FailedRequest, SyncRun, SyncRunLog } from "../api/types";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { SourceBackLink } from "../components/SourceBackLink";
 import { getApiErrorMessage, statusLabel, timeZoneNote } from "./m3Utils";
 
@@ -12,6 +13,7 @@ export function SyncRunDetailPage() {
   const { id = "" } = useParams();
   const location = useLocation();
   const requestGenerationRef = useRef(0);
+  const inFlightGenerationRef = useRef<number | null>(null);
   const [run, setRun] = useState<SyncRun | null>(null);
   const [logs, setLogs] = useState<SyncRunLog[]>([]);
   const [failed, setFailed] = useState<FailedRequest[]>([]);
@@ -24,11 +26,90 @@ export function SyncRunDetailPage() {
   const [logCursor, setLogCursor] = useState<string | null>(null);
   const [failedCursor, setFailedCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState<"logs" | "failed" | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const [error, setError] = useState("");
   const currentPath = `${location.pathname}${location.search}${location.hash}`;
 
+  const loadDetail = useCallback(
+    async (source: "initial" | "manual", targetLogCount = 0, targetFailedCount = 0) => {
+      if (inFlightGenerationRef.current !== null) return;
+      const generation = ++requestGenerationRef.current;
+      inFlightGenerationRef.current = generation;
+      if (source === "manual") setRefreshing(true);
+      setRunError("");
+      setLogsError("");
+      setFailedError("");
+      setError("");
+
+      async function loadPages<T>(
+        request: (cursor?: string) => Promise<{ items: T[]; nextCursor?: string | null }>,
+        targetCount: number,
+      ) {
+        const firstPage = await request();
+        const result = { items: [...firstPage.items], nextCursor: firstPage.nextCursor ?? null };
+        while (
+          requestGenerationRef.current === generation &&
+          result.nextCursor &&
+          result.items.length < targetCount
+        ) {
+          const nextPage = await request(result.nextCursor);
+          result.items.push(...nextPage.items);
+          result.nextCursor = nextPage.nextCursor ?? null;
+        }
+        return result;
+      }
+
+      const results = await Promise.allSettled([
+        api.getSyncRun(id),
+        loadPages(
+          (cursor) => (cursor ? api.listSyncRunLogs(id, cursor) : api.listSyncRunLogs(id)),
+          targetLogCount,
+        ),
+        loadPages(
+          (cursor) => (cursor ? api.listFailedRequests(id, cursor) : api.listFailedRequests(id)),
+          targetFailedCount,
+        ),
+      ]);
+      if (requestGenerationRef.current !== generation) return;
+      const [runResult, logsResult, failedResult] = results;
+
+      if (runResult.status === "fulfilled") {
+        setRun(runResult.value);
+        setRunState("success");
+      } else {
+        setRunError(getApiErrorMessage(runResult.reason, "运行详情加载失败"));
+        if (source === "initial") setRunState("error");
+      }
+
+      if (logsResult.status === "fulfilled") {
+        setLogs(logsResult.value.items);
+        setLogCursor(logsResult.value.nextCursor);
+        setLogsState("success");
+      } else {
+        setLogsError(getApiErrorMessage(logsResult.reason, "接口日志加载失败"));
+        if (source === "initial") setLogsState("error");
+      }
+
+      if (failedResult.status === "fulfilled") {
+        setFailed(failedResult.value.items);
+        setFailedCursor(failedResult.value.nextCursor);
+        setFailedState("success");
+      } else {
+        setFailedError(getApiErrorMessage(failedResult.reason, "失败请求加载失败"));
+        if (source === "initial") setFailedState("error");
+      }
+
+      if (results.every((result) => result.status === "fulfilled")) {
+        setLastCheckedAt(new Date());
+      }
+      setRefreshing(false);
+      if (inFlightGenerationRef.current === generation) inFlightGenerationRef.current = null;
+    },
+    [id],
+  );
+
   useEffect(() => {
-    const generation = ++requestGenerationRef.current;
     setRun(null);
     setLogs([]);
     setFailed([]);
@@ -41,48 +122,17 @@ export function SyncRunDetailPage() {
     setLogsError("");
     setFailedError("");
     setLoadingMore(null);
+    setRefreshing(false);
+    setLastCheckedAt(null);
     setError("");
-
-    void Promise.allSettled([
-      api.getSyncRun(id),
-      api.listSyncRunLogs(id),
-      api.listFailedRequests(id),
-    ]).then(([runResult, logsResult, failedResult]) => {
-      if (requestGenerationRef.current !== generation) return;
-
-      if (runResult.status === "fulfilled") {
-        setRun(runResult.value);
-        setRunState("success");
-      } else {
-        setRunError(getApiErrorMessage(runResult.reason, "运行详情加载失败"));
-        setRunState("error");
-      }
-
-      if (logsResult.status === "fulfilled") {
-        setLogs(logsResult.value.items);
-        setLogCursor(logsResult.value.nextCursor ?? null);
-        setLogsState("success");
-      } else {
-        setLogsError(getApiErrorMessage(logsResult.reason, "接口日志加载失败"));
-        setLogsState("error");
-      }
-
-      if (failedResult.status === "fulfilled") {
-        setFailed(failedResult.value.items);
-        setFailedCursor(failedResult.value.nextCursor ?? null);
-        setFailedState("success");
-      } else {
-        setFailedError(getApiErrorMessage(failedResult.reason, "失败请求加载失败"));
-        setFailedState("error");
-      }
-    });
+    inFlightGenerationRef.current = null;
+    void loadDetail("initial");
 
     return () => {
-      if (requestGenerationRef.current === generation) {
-        requestGenerationRef.current += 1;
-      }
+      requestGenerationRef.current += 1;
+      inFlightGenerationRef.current = null;
     };
-  }, [id]);
+  }, [id, loadDetail]);
 
   const rawDataPath =
     run?.batchNo && run.jijiaAccountId != null
@@ -93,6 +143,9 @@ export function SyncRunDetailPage() {
       : null;
   const needsAttention =
     run != null && (["failed", "partial_failed"].includes(run.status) || (run.failedApis ?? 0) > 0);
+  const initialLoading =
+    runState === "loading" || logsState === "loading" || failedState === "loading";
+  const refreshFailed = Boolean(runError || logsError || failedError);
 
   async function loadMoreLogs() {
     if (!logCursor) return;
@@ -151,8 +204,23 @@ export function SyncRunDetailPage() {
                   : `运行 #${id}`}
             </p>
           </div>
+          <div className="m3-refresh-controls">
+            <RefreshStatus
+              failedWithPreviousData={Boolean(lastCheckedAt && refreshFailed)}
+              lastUpdatedAt={lastCheckedAt}
+              refreshing={refreshing}
+            />
+            <Button
+              aria-label="刷新运行详情"
+              disabled={initialLoading || refreshing || loadingMore !== null}
+              loading={refreshing}
+              onClick={() => void loadDetail("manual", logs.length, failed.length)}
+            >
+              刷新运行详情
+            </Button>
+          </div>
         </header>
-        {runError ? <Alert title={runError} showIcon type="error" /> : null}
+        {runError ? <Alert title={runError} showIcon type={run ? "warning" : "error"} /> : null}
         {runState === "success" && run ? (
           <section className="m3-card m3-summary-grid" aria-label="运行摘要">
             <div>
@@ -241,7 +309,13 @@ export function SyncRunDetailPage() {
         {error ? <Alert title={error} showIcon type="error" /> : null}
         <section className="m3-card">
           <h2>接口日志</h2>
-          {logsError ? <Alert title={logsError} showIcon type="error" /> : null}
+          {logsError ? (
+            <Alert
+              title={logsError}
+              showIcon
+              type={logsState === "success" ? "warning" : "error"}
+            />
+          ) : null}
           {logsState === "loading" ? (
             <Spin description="正在加载接口日志…" />
           ) : logsState === "success" && logs.length === 0 ? (
@@ -274,7 +348,13 @@ export function SyncRunDetailPage() {
         </section>
         <section className="m3-card" id="failed-requests">
           <h2>失败请求</h2>
-          {failedError ? <Alert title={failedError} showIcon type="error" /> : null}
+          {failedError ? (
+            <Alert
+              title={failedError}
+              showIcon
+              type={failedState === "success" ? "warning" : "error"}
+            />
+          ) : null}
           {failedState === "loading" ? (
             <Spin description="正在加载失败请求…" />
           ) : failedState === "success" && failed.length === 0 ? (

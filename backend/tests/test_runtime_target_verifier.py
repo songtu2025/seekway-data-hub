@@ -3,6 +3,7 @@ from typing import Any
 
 import pytest
 
+from app.api_rate_limiter import api_rate_limit_state_table
 from backend.app.models.sync_records import (
     api_config_table,
     raw_api_data_stat_table,
@@ -14,6 +15,8 @@ from backend.app.services.migration_0003_service import (
     TARGET_INDEX_SPECS,
 )
 from backend.app.services.runtime_target_verifier import (
+    API_RATE_LIMIT_REQUIRED_COLUMNS,
+    API_RATE_LIMIT_REQUIRED_INDEXES,
     EXPECTED_ALEMBIC_HEAD,
     RAW_DATA_STAT_REQUIRED_COLUMNS,
     RAW_DATA_STAT_REQUIRED_INDEXES,
@@ -24,6 +27,7 @@ from backend.app.services.runtime_target_verifier import (
 TARGET_TABLES = sorted({table_name for table_name, _column_name in TARGET_COLUMN_SPECS})
 RUNTIME_TABLES = {
     api_config_table.name: api_config_table,
+    api_rate_limit_state_table.name: api_rate_limit_state_table,
     raw_api_data_stat_table.name: raw_api_data_stat_table,
     sale_return_order_table.name: sale_return_order_table,
 }
@@ -35,6 +39,9 @@ RUNTIME_INDEX_SPECS = {
             1,
             ("enabled", "platform_enabled", "read_only_verified"),
         ),
+    },
+    api_rate_limit_state_table.name: {
+        "PRIMARY": (0, ("rate_limit_key",)),
     },
     raw_api_data_stat_table.name: {
         "PRIMARY": (0, ("jijia_account_id", "api_code")),
@@ -57,6 +64,40 @@ RUNTIME_INDEX_SPECS = {
         "idx_sale_return_account_order": (1, ("jijia_account_id", "order_id")),
         "idx_sale_return_account_sku": (1, ("jijia_account_id", "sku")),
         "idx_sale_return_created": (1, ("created_at", "id")),
+    },
+}
+API_RATE_LIMIT_COLUMN_ROWS = {
+    "rate_limit_key": {
+        "data_type": "varchar",
+        "is_nullable": "NO",
+        "character_maximum_length": 600,
+        "datetime_precision": None,
+        "column_default": None,
+        "extra": "",
+    },
+    "next_allowed_at": {
+        "data_type": "datetime",
+        "is_nullable": "NO",
+        "character_maximum_length": None,
+        "datetime_precision": 6,
+        "column_default": None,
+        "extra": "",
+    },
+    "created_at": {
+        "data_type": "datetime",
+        "is_nullable": "NO",
+        "character_maximum_length": None,
+        "datetime_precision": 6,
+        "column_default": "CURRENT_TIMESTAMP(6)",
+        "extra": "DEFAULT_GENERATED",
+    },
+    "updated_at": {
+        "data_type": "datetime",
+        "is_nullable": "NO",
+        "character_maximum_length": None,
+        "datetime_precision": 6,
+        "column_default": "CURRENT_TIMESTAMP(6)",
+        "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)",
     },
 }
 
@@ -119,11 +160,13 @@ class FakeConnection:
         unexpected_index: bool = False,
         unexpected_unique_index: bool = False,
         api_config_ready: bool = True,
+        api_rate_limit_ready: bool = True,
         projection_ready: bool = True,
         raw_data_stat_ready: bool = True,
         missing_runtime_column: tuple[str, str] | None = None,
         missing_runtime_index: tuple[str, str] | None = None,
         runtime_myisam_table: str | None = None,
+        api_rate_limit_column_overrides: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self.read_only = read_only
         self.heads = heads if heads is not None else [EXPECTED_ALEMBIC_HEAD]
@@ -134,11 +177,13 @@ class FakeConnection:
         self.unexpected_index = unexpected_index
         self.unexpected_unique_index = unexpected_unique_index
         self.api_config_ready = api_config_ready
+        self.api_rate_limit_ready = api_rate_limit_ready
         self.projection_ready = projection_ready
         self.raw_data_stat_ready = raw_data_stat_ready
         self.missing_runtime_column = missing_runtime_column
         self.missing_runtime_index = missing_runtime_index
         self.runtime_myisam_table = runtime_myisam_table
+        self.api_rate_limit_column_overrides = api_rate_limit_column_overrides or {}
         self.calls: list[str] = []
 
     def __enter__(self):
@@ -157,6 +202,16 @@ class FakeConnection:
         if "information_schema.columns" in sql:
             runtime_table = self._runtime_table(sql)
             if runtime_table is not None:
+                if (
+                    runtime_table.name == api_rate_limit_state_table.name
+                    and "DATETIME_PRECISION" in sql
+                ):
+                    rows = []
+                    for column_name, spec in API_RATE_LIMIT_COLUMN_ROWS.items():
+                        row = {"column_name": column_name, **spec}
+                        row.update(self.api_rate_limit_column_overrides.get(column_name, {}))
+                        rows.append(row)
+                    return FakeResult(rows=rows)
                 ready = self._runtime_table_ready(runtime_table.name)
                 values = [
                     column.name
@@ -292,6 +347,7 @@ class FakeConnection:
     def _runtime_table_ready(self, table_name: str) -> bool:
         readiness = {
             api_config_table.name: self.api_config_ready,
+            api_rate_limit_state_table.name: self.api_rate_limit_ready,
             raw_api_data_stat_table.name: self.raw_data_stat_ready,
             sale_return_order_table.name: self.projection_ready,
         }
@@ -402,6 +458,62 @@ def test_runtime_target_verifier_blocks_missing_sale_return_runtime_column() -> 
 def test_raw_data_stat_contract_covers_runtime_model_and_primary_key() -> None:
     assert RAW_DATA_STAT_REQUIRED_COLUMNS == frozenset(raw_api_data_stat_table.c.keys())
     assert RAW_DATA_STAT_REQUIRED_INDEXES == frozenset({"PRIMARY"})
+
+
+def test_api_rate_limit_contract_covers_runtime_model_and_primary_key() -> None:
+    assert API_RATE_LIMIT_REQUIRED_COLUMNS == frozenset(api_rate_limit_state_table.c.keys())
+    assert API_RATE_LIMIT_REQUIRED_INDEXES == frozenset({"PRIMARY"})
+
+
+def test_runtime_target_verifier_requires_api_rate_limit_schema() -> None:
+    result = verify_runtime_target(FakeEngine(FakeConnection(api_rate_limit_ready=False)))
+
+    assert result.status == "blocked"
+    assert result.code == "RUNTIME_API_RATE_LIMIT_SCHEMA_MISMATCH"
+
+
+@pytest.mark.parametrize(
+    ("column_name", "overrides"),
+    [
+        ("rate_limit_key", {"data_type": "text"}),
+        ("rate_limit_key", {"character_maximum_length": 599}),
+        ("rate_limit_key", {"is_nullable": "YES"}),
+        ("next_allowed_at", {"data_type": "timestamp"}),
+        ("created_at", {"datetime_precision": 0}),
+        ("updated_at", {"is_nullable": "YES"}),
+        ("created_at", {"column_default": None}),
+        ("updated_at", {"column_default": None}),
+        ("updated_at", {"extra": "DEFAULT_GENERATED"}),
+    ],
+)
+def test_runtime_target_verifier_rejects_api_rate_limit_column_drift(
+    column_name: str,
+    overrides: dict[str, Any],
+) -> None:
+    result = verify_runtime_target(
+        FakeEngine(FakeConnection(api_rate_limit_column_overrides={column_name: overrides}))
+    )
+
+    assert result.status == "blocked"
+    assert result.code == "RUNTIME_API_RATE_LIMIT_SCHEMA_MISMATCH"
+
+
+def test_runtime_target_verifier_accepts_mysql_timestamp_metadata_variants() -> None:
+    result = verify_runtime_target(
+        FakeEngine(
+            FakeConnection(
+                api_rate_limit_column_overrides={
+                    "created_at": {"column_default": "current_timestamp(6)"},
+                    "updated_at": {
+                        "column_default": "current_timestamp(6)",
+                        "extra": "on update current_timestamp(6)",
+                    },
+                }
+            )
+        )
+    )
+
+    assert result.status == "pass"
 
 
 def test_runtime_target_verifier_requires_raw_data_stat_schema() -> None:

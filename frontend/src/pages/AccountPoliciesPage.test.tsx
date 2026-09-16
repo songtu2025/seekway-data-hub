@@ -125,6 +125,84 @@ describe("账号接口策略页", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("手动刷新保留筛选、当前接口和批量选择，并阻止重复请求", async () => {
+    const refreshedAccount = deferred<JijiaAccount>();
+    const refreshedPolicies = deferred<ApiPolicy[]>();
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/accounts/8/policies"]}>
+        <Routes>
+          <Route path="/accounts/:accountId/policies" element={<AccountPoliciesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findAllByText("流量数据-ASIN");
+    await user.type(screen.getByRole("searchbox", { name: "搜索同步接口" }), "流量");
+    await chooseSelectOption(user, "按业务域筛选", "运营管理");
+    await user.click(screen.getByRole("button", { name: "未启用 1" }));
+    await user.click(screen.getByRole("checkbox", { name: "选择 流量数据-ASIN" }));
+    vi.mocked(api.getAccount).mockReturnValue(refreshedAccount.promise);
+    vi.mocked(api.listPolicies).mockReturnValue(refreshedPolicies.promise);
+
+    await user.dblClick(screen.getByRole("button", { name: "刷新同步接口" }));
+
+    expect(api.getAccount).toHaveBeenCalledTimes(2);
+    expect(api.listPolicies).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/正在刷新/)).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "搜索同步接口" })).toHaveValue("流量");
+    expect(screen.getByRole("button", { name: "未启用 1" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("checkbox", { name: "选择 流量数据-ASIN" })).toBeChecked();
+    expect(screen.getByText("已选择 1 个接口（每次最多 100 个）")).toBeInTheDocument();
+
+    await act(async () => {
+      refreshedAccount.resolve({ ...account, name: "北美业务账号（已更新）" });
+      refreshedPolicies.reject(new ApiError("策略刷新失败", 503, "UNAVAILABLE"));
+      await refreshedPolicies.promise.catch(() => undefined);
+    });
+
+    expect(await screen.findByText(/北美业务账号（已更新）/)).toBeInTheDocument();
+    expect(screen.getAllByText("流量数据-ASIN").length).toBeGreaterThan(0);
+    expect(screen.getByRole("alert")).toHaveTextContent("策略刷新失败");
+    expect(screen.getByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getByText(/刷新失败 · 仍显示/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "刷新同步接口" })).toBeEnabled();
+  });
+
+  it("刷新成功后保留搜索并剔除服务端已删除的批量选择", async () => {
+    const removedPolicy: ApiPolicy = {
+      ...policy,
+      id: 22,
+      apiCode: "inventory_removed",
+      name: "已删除库存接口",
+      domain: "inventory",
+    };
+    vi.mocked(api.listPolicies).mockResolvedValue([policy, removedPolicy]);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/accounts/8/policies"]}>
+        <Routes>
+          <Route path="/accounts/:accountId/policies" element={<AccountPoliciesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findAllByText("已删除库存接口");
+    await user.click(screen.getByRole("checkbox", { name: "选择 已删除库存接口" }));
+    await user.type(screen.getByRole("searchbox", { name: "搜索同步接口" }), "库存");
+    vi.mocked(api.listPolicies).mockResolvedValue([policy]);
+    await user.click(screen.getByRole("button", { name: "刷新同步接口" }));
+
+    await waitFor(() => expect(api.listPolicies).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("searchbox", { name: "搜索同步接口" })).toHaveValue("库存");
+    expect(screen.getByText("当前显示 0 / 1")).toBeInTheDocument();
+    expect(screen.queryByText("已选择 1 个接口（每次最多 100 个）")).not.toBeInTheDocument();
+    expect(screen.getByText("没有符合条件的接口，可清除搜索或选择全部接口。")).toBeInTheDocument();
+  });
+
   it("从任务支线定位未启用接口并原样恢复草稿与来源", async () => {
     const user = userEvent.setup();
     vi.mocked(api.listPolicies).mockResolvedValue([

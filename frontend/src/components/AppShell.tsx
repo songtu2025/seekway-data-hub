@@ -6,6 +6,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import type { DashboardSummary } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { PRODUCT_NAME } from "../config/product";
 import { useWorkerRuntime } from "../hooks/useWorkerRuntime";
 
 interface SectionNavItem {
@@ -70,7 +71,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   const { runtime: workerRuntime } = useWorkerRuntime({
     refreshKey: location.pathname,
-    retainLastResultOnError: false,
   });
   const inSyncSection =
     location.pathname.startsWith("/jobs") || location.pathname.startsWith("/runs");
@@ -166,7 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="brand-mark brand-mark--image"
             src="/favicon.svg"
           />
-          <span>SEEKWAY数据接入平台</span>
+          <span>{PRODUCT_NAME}</span>
         </div>
         <nav aria-label="主导航">
           <NavLink className="top-nav-link" end to="/">

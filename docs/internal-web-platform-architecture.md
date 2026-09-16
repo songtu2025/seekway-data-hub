@@ -7,7 +7,7 @@
 项目只有两个宏观阶段：
 
 1. **积加 API 同步工具（历史基础）**：以 CLI 和 cron 为入口，沉淀鉴权、请求、分页、重试、落库和 checkpoint 能力。它不再是最终产品，也不再承担平台完成后的生产日常同步。
-2. **积加数据同步管理平台（当前且唯一目标）**：以 Web、Scheduler、数据库任务队列和 Worker 为唯一生产业务入口。第一阶段代码只作为平台内部同步内核及受控迁移、检查能力存在。
+2. **SEEKWAY 数据接入中心（当前且唯一目标）**：积加作为首个数据源连接器，以 Web、Scheduler、数据库任务队列和 Worker 为唯一生产业务入口。第一阶段代码只作为平台内部积加同步内核及受控迁移、检查能力存在。
 
 本文后续 M1～M4 和“平台收口步骤”均属于第二阶段内部工作，不得与上述两个宏观阶段混用。
 
@@ -16,13 +16,13 @@
 - 保留现有 `app/` 同步核心，不将同步逻辑迁入 Web 目录。
 - 保留 FastAPI、React、TypeScript、Vite 和 PolarDB MySQL 技术栈。
 - 保持 ECS、Nginx、systemd 原生部署，不引入 Docker。
-- 当前继续使用数据库任务队列和单 Worker，不引入 Redis、Celery 或 Kafka。
+- 当前使用数据库任务队列和四个独立 Worker 实例，不引入 Redis、Celery 或 Kafka。
 - 优先解决调度归属、配置事实来源和同步核心职责过重的问题。
 - 采用渐进式改造，不进行一次性重写。
 
 ## 2. 产品定位
 
-本产品定位为公司内部使用的积加数据同步管理平台，服务于单一组织，可以管理多个积加账号。
+本产品定位为公司内部使用的 SEEKWAY Data Hub（SEEKWAY 数据接入中心），服务于单一组织；当前先管理多个积加账号，后续只在出现第二个真实数据源时提炼通用连接器边界。
 
 平台主要目标：
 
@@ -41,7 +41,6 @@
 - 用户自定义 SQL。
 - 通用报表或可视化编排引擎。
 - Redis、Celery、Kafka 等额外基础设施。
-- 多 Worker 并行调度。
 
 ## 3. 当前架构判断
 
@@ -49,7 +48,7 @@
 
 - `frontend/` 提供 React 管理后台。
 - `backend/` 提供 FastAPI 控制面、身份认证、账号管理、任务管理和数据查询。
-- `backend/app/worker.py` 提供独立 Worker 进程。
+- `backend/app/worker.py` 提供可多实例运行的独立 Worker 进程。
 - `app/` 提供积加认证、API 请求、分页、重试、幂等写入和同步状态维护。
 - PolarDB MySQL 同时承担业务数据存储和数据库任务队列。
 - Nginx 负责 TLS、静态资源、登录限流和 API 反向代理。
@@ -78,8 +77,8 @@ flowchart TB
         API --> JobService["任务服务"]
         API --> QueryService["运行与数据查询服务"]
 
-        WorkerMain["唯一 Worker 进程"] --> Scheduler["SyncScheduler<br/>到期策略生成任务"]
-        WorkerMain --> Worker["SyncWorker<br/>领取、心跳、失联恢复"]
+        Scheduler["独立 Scheduler 进程<br/>到期策略生成任务"]
+        WorkerPool["Worker 实例池<br/>worker-1 至 worker-4"] --> Worker["SyncWorker<br/>领取、心跳、失联恢复"]
         Worker --> Executor["CoreSyncExecutor<br/>账号凭证与任务上下文"]
 
         CLI["CLI<br/>检查、预检、单接口诊断"] --> Lock["MySQL Named Lock"]
@@ -123,7 +122,7 @@ flowchart TB
 
     Account --> Scheduler
     Scheduler --> Queue
-    Queue --> Worker
+    Queue --> WorkerPool
     Worker --> Account
 
     YAML["YAML API 技术定义"] --> Engine
@@ -179,7 +178,10 @@ Worker 负责：
 - 调用现有 `app/` 同步核心。
 - 保存最终任务状态和关联批次。
 
-当前保留单 Worker。只有出现持续队列积压时，才评估账号级并发和多 Worker。
+生产目标配置为四个 Worker 实例。任务通过 `SKIP LOCKED` 唯一领取，同一账号继续由
+MySQL named lock 串行；不同账号可以并行。全部账号和进程对相同 HTTP 方法与路径共享
+数据库限流时间线，因此增加 Worker 只扩展不同账号、不同接口之间的并行能力，不突破
+积加单接口限额。发布必须按 1→2→4 灰度，异常时先回退到单 Worker。
 
 ### 5.4 同步核心
 
@@ -436,7 +438,7 @@ app/api_executor.py
 ```text
 Nginx
 FastAPI API service
-Single Worker service
+Four systemd Worker instances
 PolarDB MySQL
 ```
 
@@ -536,18 +538,19 @@ git diff --check
 6. 每个任务、批次、账号和 API 的关联可追踪。
 7. raw 最新快照、变化历史、checkpoint 和失败日志完整。
 8. 敏感凭证和 Token 不通过 API、日志或页面泄露。
-9. 单 Worker 能在下一个调度周期前完成计划任务。
+9. 四个 Worker 按 1→2→4 灰度后容量、队列、账号锁和共享单接口限流均符合预期，并可回退到单 Worker。
 10. 必要测试、构建、dry-run 和差异检查通过。
 
 ## 16. 推荐下一步
 
-下一阶段先进行只读的调度归属审计，输出以下结果：
+下一阶段先完成类生产并发灰度和只读调度归属审计，输出以下结果：
 
 - 当前生产 cron 和 systemd timer 清单。
 - YAML enabled API 清单。
 - Web `account_api_policy` 清单。
-- 当前 Worker 运行方式。
+- 当前 Worker 运行方式、数据库连接预算和 1→2→4 冷启动证据。
+- 队列深度、最老等待任务、429 和 Worker 在线容量。
 - cron 与 Web 的重复、缺失和特殊接口。
 - 第一批可安全迁移的账号和 API。
 
-完成审计并获得确认后，再开始步骤一的代码或配置变更。
+完成审计并获得确认后，再选择低数据量只读接口进行真实积加小流量验证；不得为了验证并发主动压测同一接口。

@@ -30,7 +30,7 @@
 
 ## 2. 项目事实与架构边界
 
-1. 最终产品是积加数据同步管理平台；第一阶段 CLI/cron 只是历史基础。生产业务最终只通过 Web、Scheduler、数据库任务队列和 Worker 运行，`app/` 仅作为平台内部同步内核及受控运维能力保留。
+1. 最终产品是 SEEKWAY Data Hub（SEEKWAY 数据接入中心），积加是首个数据源连接器；第一阶段 CLI/cron 只是历史基础。生产业务最终只通过 Web、Scheduler、数据库任务队列和 Worker 运行，`app/` 仅作为平台内部积加同步内核及受控运维能力保留。
 2. 保持现有 `app/` 单体同步核心；Web 服务独立放在 `backend/` 和 `frontend/`，不得把同步核心迁入 Web 目录。
 3. Web 服务使用 FastAPI、React、TypeScript 和 Vite；不得借规范升级重构既有同步链路。
 4. `sql/init_tables.sql` 管理既有同步表；Alembic 只管理 Web 身份域和已确认的 Web 增量表，不能接管、删除或重建既有同步表。

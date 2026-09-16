@@ -45,6 +45,12 @@ describe("应用外壳退出", () => {
     apiState.getWorkerRuntime.mockReset();
     apiState.getWorkerRuntime.mockResolvedValue({
       availability: "online",
+      capacityStatus: "ready",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 1,
+      busyWorkerCount: 0,
+      idleWorkerCount: 1,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-09-12T08:30:00Z",
       currentJobId: null,
       queueDepth: 0,
@@ -58,6 +64,12 @@ describe("应用外壳退出", () => {
   it("在其他页面按实时状态显示全局 Worker 异常提示", async () => {
     apiState.getWorkerRuntime.mockResolvedValueOnce({
       availability: "offline",
+      capacityStatus: "offline",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 0,
+      busyWorkerCount: 0,
+      idleWorkerCount: 0,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-09-12T08:20:00Z",
       currentJobId: null,
       queueDepth: 2,
@@ -73,7 +85,7 @@ describe("应用外壳退出", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("SEEKWAY数据接入平台")).toBeInTheDocument();
+    expect(screen.getByText("SEEKWAY 数据接入中心")).toBeInTheDocument();
     expect(document.querySelector(".brand-mark--image")).toHaveAttribute("src", "/favicon.svg");
     expect(await screen.findByRole("status")).toHaveTextContent("任务执行服务离线");
     expect(screen.getByRole("link", { name: "查看执行服务" })).toHaveAttribute(
@@ -128,6 +140,12 @@ describe("应用外壳退出", () => {
   it("页面切换时立即刷新并移除已经恢复的离线提示", async () => {
     apiState.getWorkerRuntime.mockResolvedValueOnce({
       availability: "offline",
+      capacityStatus: "offline",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 0,
+      busyWorkerCount: 0,
+      idleWorkerCount: 0,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-09-12T08:20:00Z",
       currentJobId: null,
       queueDepth: 0,
@@ -154,6 +172,12 @@ describe("应用外壳退出", () => {
   it("同步任务区域不重复显示全局 Worker 异常提示", async () => {
     apiState.getWorkerRuntime.mockResolvedValueOnce({
       availability: "offline",
+      capacityStatus: "offline",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 0,
+      busyWorkerCount: 0,
+      idleWorkerCount: 0,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-09-12T08:20:00Z",
       currentJobId: null,
       queueDepth: 2,

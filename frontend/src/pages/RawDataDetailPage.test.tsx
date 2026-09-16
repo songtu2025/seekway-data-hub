@@ -247,6 +247,199 @@ describe("原始数据详情", () => {
     expect(screen.getByText(/共 2 个字段发生变化/)).toBeInTheDocument();
   });
 
+  it("手动刷新保留搜索、版本对比和旧内容，并阻止重复请求", async () => {
+    authState.role = "admin";
+    const refreshedDetail = deferred<RawDataDetail>();
+    const refreshedVersions = deferred<RawDataVersionListResponse>();
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/raw-data/3"]}>
+        <Routes>
+          <Route path="/raw-data/:id" element={<RawDataDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText(/masked/);
+    await user.type(screen.getByLabelText("搜索字段或值"), "secret");
+    await chooseSelectOption(user, "版本 B", "版本 4 · BATCH-V1");
+    vi.mocked(api.getRawData).mockReturnValue(refreshedDetail.promise);
+    vi.mocked(api.listRawDataVersions).mockReturnValue(refreshedVersions.promise);
+
+    await user.dblClick(screen.getByRole("button", { name: "刷新数据" }));
+
+    expect(api.getRawData).toHaveBeenCalledTimes(2);
+    expect(api.listRawDataVersions).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/正在刷新/)).toBeInTheDocument();
+    expect(screen.getByLabelText("搜索字段或值")).toHaveValue("secret");
+    expect(
+      screen.getByRole("combobox", { name: "版本 B" }).closest(".ant-select"),
+    ).toHaveTextContent("版本 4 · BATCH-V1");
+    expect(screen.getAllByText(/masked/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/version-visible/).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      refreshedDetail.resolve({
+        id: 3,
+        apiCode: "sale_return_order_page",
+        sourcePrimaryKey: "R-1",
+        sensitive: true,
+        rawJson: { secret: "updated" },
+        versionCount: 1,
+      });
+      refreshedVersions.reject(new Error("versions unavailable"));
+      await refreshedVersions.promise.catch(() => undefined);
+    });
+
+    expect((await screen.findAllByText(/updated/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/version-visible/).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("搜索字段或值")).toHaveValue("secret");
+    expect(screen.getByRole("alert")).toHaveTextContent("版本历史加载失败，请稍后重试");
+    expect(screen.getByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getByText(/刷新失败 · 仍显示/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "刷新数据" })).toBeEnabled();
+  });
+
+  it("刷新后恢复已经加载的版本数量", async () => {
+    const firstVersion = {
+      id: 4,
+      batchNo: "BATCH-V1",
+      dataHash: "hash-1",
+      observedAt: "2026-08-26T00:00:00Z",
+    };
+    const secondVersion = {
+      id: 5,
+      batchNo: "BATCH-V2",
+      dataHash: "hash-2",
+      observedAt: "2026-08-27T00:00:00Z",
+    };
+    let refreshStarted = false;
+    vi.mocked(api.listRawDataVersions).mockImplementation(async (_id, cursor) => {
+      if (cursor) {
+        return {
+          items: [
+            refreshStarted ? { ...secondVersion, dataHash: "hash-2-refreshed" } : secondVersion,
+          ],
+        };
+      }
+      return {
+        items: [refreshStarted ? { ...firstVersion, dataHash: "hash-1-refreshed" } : firstVersion],
+        nextCursor: "page-2",
+      };
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/raw-data/3"]}>
+        <Routes>
+          <Route path="/raw-data/:id" element={<RawDataDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("hash-1");
+    await user.click(screen.getByRole("button", { name: "加载更多版本" }));
+    expect(await screen.findByText("hash-2")).toBeInTheDocument();
+    refreshStarted = true;
+    await user.click(screen.getByRole("button", { name: "刷新数据" }));
+
+    expect(await screen.findByText("hash-1-refreshed")).toBeInTheDocument();
+    expect(screen.getByText("hash-2-refreshed")).toBeInTheDocument();
+    expect(api.listRawDataVersions).toHaveBeenCalledTimes(4);
+  });
+
+  it("刷新后继续加载被选中但已后移的版本", async () => {
+    authState.role = "admin";
+    let refreshStarted = false;
+    vi.mocked(api.listRawDataVersions).mockImplementation(async (_id, cursor) => {
+      if (!refreshStarted) {
+        return {
+          items: [
+            {
+              id: 4,
+              batchNo: "BATCH-V1",
+              dataHash: "hash-1",
+              observedAt: "2026-08-26T00:00:00Z",
+              rawJson: { versionSecret: "version-visible" },
+            },
+          ],
+        };
+      }
+      if (cursor) {
+        return {
+          items: [
+            {
+              id: 4,
+              batchNo: "BATCH-V1",
+              dataHash: "hash-1",
+              observedAt: "2026-08-26T00:00:00Z",
+              rawJson: { versionSecret: "version-visible" },
+            },
+          ],
+        };
+      }
+      return {
+        items: [
+          {
+            id: 5,
+            batchNo: "BATCH-V2",
+            dataHash: "hash-2",
+            observedAt: "2026-08-27T00:00:00Z",
+          },
+        ],
+        nextCursor: "page-2",
+      };
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/raw-data/3"]}>
+        <Routes>
+          <Route path="/raw-data/:id" element={<RawDataDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText(/masked/);
+    await chooseSelectOption(user, "版本 B", "版本 4 · BATCH-V1");
+    refreshStarted = true;
+    await user.click(screen.getByRole("button", { name: "刷新数据" }));
+
+    expect(await screen.findByText("批次 BATCH-V2")).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "版本 B" }).closest(".ant-select"),
+    ).toHaveTextContent("版本 4 · BATCH-V1");
+    expect(api.listRawDataVersions).toHaveBeenCalledWith("3", "page-2");
+  });
+
+  it("刷新成功后清理已不存在的版本对比选择", async () => {
+    authState.role = "admin";
+    const replacementVersion = {
+      id: 5,
+      batchNo: "BATCH-V2",
+      dataHash: "hash-2",
+      observedAt: "2026-08-27T00:00:00Z",
+      rawJson: { replacement: true },
+    };
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/raw-data/3"]}>
+        <Routes>
+          <Route path="/raw-data/:id" element={<RawDataDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText(/masked/);
+    await chooseSelectOption(user, "版本 B", "版本 4 · BATCH-V1");
+    vi.mocked(api.listRawDataVersions).mockResolvedValue({ items: [replacementVersion] });
+    await user.click(screen.getByRole("button", { name: "刷新数据" }));
+
+    expect(await screen.findByText("批次 BATCH-V2")).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "版本 B" }).closest(".ant-select"),
+    ).toHaveTextContent("选择版本");
+    expect(screen.queryByText(/个字段发生变化/)).not.toBeInTheDocument();
+  });
+
   it("版本请求失败时仍展示已经成功加载的当前记录", async () => {
     vi.mocked(api.listRawDataVersions).mockRejectedValue(new Error("versions unavailable"));
     render(

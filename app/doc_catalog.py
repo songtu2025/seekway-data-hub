@@ -288,6 +288,7 @@ def build_catalog(
                 "has_list_response": classified["has_list_response"],
                 "has_sensitive_response_fields": classified["has_sensitive_response_fields"],
                 "response_fields": classified["response_fields"],
+                "rate_limit": official_rate_limit(detail),
                 "configured_api_code": configured_api.get("api_code") if configured_api else "",
                 "configured_api_codes": configured_codes,
                 "configured_enabled": bool(enabled_codes),
@@ -310,6 +311,35 @@ def build_catalog(
         "summary": _summarize_catalog(catalog, errors, configured_by_path),
         "apis": sorted(catalog, key=lambda item: (item["menu_path"], item["doc_id"] or 0)),
         "errors": errors,
+    }
+
+
+def official_rate_limit(detail: dict[str, Any]) -> dict[str, Any] | None:
+    """提取官方接口当前生效或默认的单接口限额。"""
+    max_requests = detail.get("limitTimes")
+    period_seconds = detail.get("limitPeriod")
+    limit_type_name = detail.get("limitTypeName")
+    if max_requests is None:
+        max_requests = detail.get("defaultLimitTimes")
+    if period_seconds is None:
+        period_seconds = detail.get("defaultLimitPeriod")
+    if not limit_type_name:
+        limit_type_name = detail.get("defaultLimitTypeName")
+    if (
+        isinstance(max_requests, bool)
+        or not isinstance(max_requests, int)
+        or max_requests < 1
+        or isinstance(period_seconds, bool)
+        or not isinstance(period_seconds, (int, float))
+        or period_seconds <= 0
+    ):
+        return None
+    if str(limit_type_name) != "秒":
+        return None
+    return {
+        "max_requests": max_requests,
+        "period_seconds": period_seconds,
+        "dimension": str(detail.get("dimensionTypeName") or ""),
     }
 
 
