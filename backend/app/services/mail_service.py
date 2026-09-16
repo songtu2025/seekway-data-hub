@@ -48,13 +48,28 @@ class SmtpMailSender:
 
     def _send(self, message: EmailMessage) -> None:
         """通过当前 SMTP 配置发送邮件。"""
-        with smtplib.SMTP(
-            self.settings.smtp_host,
-            self.settings.smtp_port,
-            timeout=SMTP_TIMEOUT_SECONDS,
-        ) as client:
+        tls_context = (
+            ssl.create_default_context()
+            if self.settings.smtp_use_ssl or self.settings.smtp_use_tls
+            else None
+        )
+        client: smtplib.SMTP
+        if self.settings.smtp_use_ssl:
+            client = smtplib.SMTP_SSL(
+                self.settings.smtp_host,
+                self.settings.smtp_port,
+                timeout=SMTP_TIMEOUT_SECONDS,
+                context=tls_context,
+            )
+        else:
+            client = smtplib.SMTP(
+                self.settings.smtp_host,
+                self.settings.smtp_port,
+                timeout=SMTP_TIMEOUT_SECONDS,
+            )
+        with client:
             if self.settings.smtp_use_tls:
-                client.starttls(context=ssl.create_default_context())
+                client.starttls(context=tls_context)
             if self.settings.smtp_user:
                 client.login(self.settings.smtp_user, self.settings.smtp_password)
             client.send_message(message)
