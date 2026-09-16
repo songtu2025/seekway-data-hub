@@ -289,6 +289,8 @@ def _render_env(runtime_password: str, encryption_key: str) -> str:
             f"DB_NAME={EXPECTED_DATABASE}",
             f"DB_USER={RUNTIME_USER}",
             f"DB_PASSWORD={runtime_password}",
+            "DB_POOL_SIZE=3",
+            "DB_MAX_OVERFLOW=2",
             "API_CONFIG_PATH=config/api_config.example.yaml",
             "PUBLIC_WEB_URL=http://127.0.0.1:5183",
             "SESSION_COOKIE_NAME=jijia_local_session",
@@ -298,6 +300,7 @@ def _render_env(runtime_password: str, encryption_key: str) -> str:
             "WORKER_POLL_SECONDS=3",
             "WORKER_HEARTBEAT_SECONDS=30",
             "WORKER_STALE_MINUTES=10",
+            "SYNC_LOCK_SCOPE=account",
             "",
         )
     )

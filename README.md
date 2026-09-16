@@ -437,8 +437,8 @@ Web 管理服务独立位于 `backend/` 和 `frontend/`。当前支持受邀注�
 不允许在网页直接修改路径、分页或安全分类等底层配置。
 
 Windows PowerShell 本地完整系统启动。API 固定监听 `127.0.0.1:8004`，Web 使用 `5183`
-端口并默认监听 `127.0.0.1`；`dev-local.ps1` 会同时启动 API、常驻 Worker 和 Web，任一
-进程退出时会停止其余进程：
+端口并默认监听 `127.0.0.1`；`dev-local.ps1` 会同时启动 API、唯一 Scheduler、指定数量的
+常驻 Worker 和 Web，任一进程退出时会停止其余进程：
 
 ```powershell
 .\scripts\setup.ps1
@@ -446,7 +446,7 @@ Windows PowerShell 本地完整系统启动。API 固定监听 `127.0.0.1:8004`�
 .\scripts\setup-local-test.ps1
 .\.venv\Scripts\python.exe -m dotenv -f .env.localtest run --override -- `
   ".\.venv\Scripts\python.exe" -m backend.app.cli bootstrap-admin --email admin@example.com
-.\scripts\dev-local.ps1
+.\scripts\dev-local.ps1 -WorkerProcesses 4
 ```
 
 `setup-local-test.ps1` 只需在首次使用固定本地隔离库时运行；它要求 `.env` 指向本机
@@ -454,6 +454,15 @@ Windows PowerShell 本地完整系统启动。API 固定监听 `127.0.0.1:8004`�
 `.env.localtest`。
 `dev-local.ps1` 启动的 Worker 会处理该隔离库中的排队任务；本地库存在有效账号凭据和排队任务时，
 任务仍会调用真实积加 API。
+
+隔离库队列为空、API 已单独运行在 `8004` 且没有其他 Worker 在线时，可以重复执行本地
+冷启动门禁。`canary` 按 1→2→4 启动，`burst` 同时启动四个 Worker；两种模式都不启动
+Scheduler，并在每轮结束后清理测试进程：
+
+```powershell
+.\scripts\worker-cold-start-canary.ps1 -Rounds 10 -Mode canary
+.\scripts\worker-cold-start-canary.ps1 -Rounds 10 -Mode burst
+```
 
 本地 `MAIL_PROVIDER=console` 时，邀请地址只输出到执行邀请操作的进程终端；生产环境必须配置 SMTP、HTTPS、`SESSION_COOKIE_SECURE=true` 和带 `__Host-` 前缀的 Cookie 名。`0001` 只创建 `app_user`、`auth_action_token`、`user_session`，生产迁移必须由部署负责人执行。
 

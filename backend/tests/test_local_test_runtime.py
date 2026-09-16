@@ -85,6 +85,9 @@ def test_setup_creates_least_privilege_runtime_config(tmp_path: Path) -> None:
     assert "DB_HOST=127.0.0.1" in env_text
     assert f"DB_NAME={local_test_runtime.EXPECTED_DATABASE}" in env_text
     assert f"DB_USER={local_test_runtime.RUNTIME_USER}" in env_text
+    assert "DB_POOL_SIZE=3" in env_text
+    assert "DB_MAX_OVERFLOW=2" in env_text
+    assert "SYNC_LOCK_SCOPE=account" in env_text
     assert "SESSION_COOKIE_NAME=jijia_local_session" in env_text
     for key, value in local_test_runtime.EXPECTED_JIJIA_TARGET.items():
         assert f"{key}={value}\n" in env_text
@@ -269,9 +272,24 @@ def test_local_scripts_keep_api_and_web_on_isolated_ports() -> None:
     assert "-m backend.app.scheduler" in scheduler_script
     assert "-m scripts.local_test_runtime worker-once" in worker_once_script
     assert "-m scripts.dev_local_system" in system_script
+    assert "$env:DB_POOL_SIZE = 3" in system_script
+    assert "$env:DB_MAX_OVERFLOW = 2" in system_script
+    assert '$env:SYNC_LOCK_SCOPE = "account"' in system_script
 
     supervisor = (root / "scripts" / "dev_local_system.py").read_text(encoding="utf-8")
     assert 'os.getenv("WORKER_PROCESSES", "1")' in supervisor
+
+    cold_start_canary = (root / "scripts" / "worker-cold-start-canary.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "scripts.local_test_runtime check" in cold_start_canary
+    assert "LOCAL_QUEUE_NOT_EMPTY" in cold_start_canary
+    assert "CANARY_RUNTIME_CLEANUP_FAILED" in cold_start_canary
+    assert "canary-worker-%" in cold_start_canary
+    assert 'WORKER_PROCESSES = "4"' in cold_start_canary
+    assert 'SYNC_LOCK_SCOPE = "account"' in cold_start_canary
+    assert '[ValidateSet("canary", "burst")]' in cold_start_canary
+    assert "backend.app.scheduler" not in cold_start_canary
     assert '"dev-local-scheduler.ps1"' in supervisor
     assert '"-WorkerName", f"local-worker-{index}"' in supervisor
 
