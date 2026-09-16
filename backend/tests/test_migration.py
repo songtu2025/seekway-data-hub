@@ -1,10 +1,35 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
+
+from backend.migrations.compat import supports_named_check_constraints
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "server_version", "expected"),
+    [
+        ("mysql", (8, 0, 13), False),
+        ("mysql", (8, 0, 16), True),
+        ("sqlite", (3, 40, 0), True),
+    ],
+)
+def test_sync_job_check_constraint_compatibility(
+    dialect_name: str,
+    server_version: tuple[int, ...],
+    expected: bool,
+) -> None:
+    connection = SimpleNamespace(
+        dialect=SimpleNamespace(
+            name=dialect_name,
+            server_version_info=server_version,
+        )
+    )
+    assert supports_named_check_constraints(connection) is expected
 
 
 def test_alembic_revision_ids_fit_version_table_column() -> None:
