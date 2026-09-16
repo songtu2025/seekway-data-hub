@@ -9,8 +9,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.app import main as main_module
 from backend.app.core.config import get_web_settings
 from backend.app.core.database import get_db
+from backend.app.core.product import PRODUCT_NAME
 from backend.app.main import create_app
 from backend.tests.conftest import AuthHarness
+
+
+def test_app_metadata_uses_product_name() -> None:
+    assert create_app(validate_settings=False).title == f"{PRODUCT_NAME} API"
 
 
 def test_liveness_and_readiness_are_public(harness: AuthHarness) -> None:

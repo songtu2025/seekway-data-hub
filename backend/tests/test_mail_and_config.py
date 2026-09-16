@@ -1,10 +1,12 @@
 import ssl
+from email.message import EmailMessage
 
 import pytest
 from cryptography.fernet import Fernet
 from pydantic import ValidationError
 
 from backend.app.core.config import WebSettings
+from backend.app.core.product import PRODUCT_NAME
 from backend.app.services import mail_service
 from backend.app.services.mail_service import (
     ConsoleMailSender,
@@ -17,6 +19,7 @@ from backend.app.services.mail_service import (
 class FakeSmtpClient:
     def __init__(self, events: list[str]) -> None:
         self.events = events
+        self.messages: list[EmailMessage] = []
         self.tls_context: ssl.SSLContext | None = None
 
     def __enter__(self) -> "FakeSmtpClient":
@@ -32,7 +35,8 @@ class FakeSmtpClient:
     def login(self, _user: str, _password: str) -> None:
         self.events.append("login")
 
-    def send_message(self, _message: object) -> None:
+    def send_message(self, message: EmailMessage) -> None:
+        self.messages.append(message)
         self.events.append("send")
 
 
@@ -82,6 +86,27 @@ def test_smtp_starttls_uses_verified_default_context_before_login_and_send(
         "timeout": 30,
     }
     assert events == ["starttls", "login", "send"] * 2
+
+
+def test_smtp_mail_subjects_use_product_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = FakeSmtpClient([])
+    monkeypatch.setattr(mail_service.smtplib, "SMTP", lambda *_args, **_kwargs: client)
+    settings = WebSettings(
+        _env_file=None,
+        mail_provider="smtp",
+        smtp_host="smtp.example.com",
+        smtp_from="no-reply@example.com",
+        smtp_use_tls=False,
+    )
+    sender = SmtpMailSender(settings)
+
+    sender.send_invitation("user@example.com", "viewer", "http://localhost/register#synthetic")
+    sender.send_password_reset("user@example.com", "http://localhost/reset#synthetic")
+
+    assert [message["Subject"] for message in client.messages] == [
+        f"{PRODUCT_NAME}邀请",
+        f"{PRODUCT_NAME}密码重置",
+    ]
 
 
 def test_smtp_without_tls_never_creates_or_uses_ssl_context(

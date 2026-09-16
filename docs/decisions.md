@@ -3332,3 +3332,11 @@
 - 历史上一次同时启动出现的瞬时 `OperationalError`，在补齐连接池和账号锁配置后经 10 轮 1→2→4 与 10 轮四实例 burst 均未复现，因此不增加无证据的应用层启动重试；生产继续依赖 systemd `Restart=on-failure`，并在 ECS 灰度中复核。
 - 暂不实现接口感知调度、自动扩缩容、账号加接口细粒度锁或新中间件。只有真实调度周期证明多个同接口任务长期占满 Worker 并造成队列阻塞时，才优先评估确定性错峰，再评估领取阶段的接口级准入。
 - 冷启动门禁只允许使用 `.env.localtest` 指向的隔离 MySQL、空任务队列和未运行 Scheduler；测试 Worker 使用稳定前缀并在全部进程离线后清理自身遥测。生产运行时记录不执行自动删除。
+
+## 2026-09-16 SEEKWAY Data Hub 命名决策
+
+- 产品中文名统一为 `SEEKWAY 数据接入中心`，英文名统一为 `SEEKWAY Data Hub`，生产域名使用 `datahub.seekwaygroup.com`。
+- 仓库目标名为 `seekway-data-hub`；生产运行目录、配置文件和 systemd 前缀分别使用 `/opt/seekway-data-hub`、`/etc/seekway-data-hub.env` 和 `seekway-datahub-*`。
+- 积加是首个真实数据源连接器，`JIJIA_*` 环境变量、积加业务模型、数据库表和同步核心保持原名；没有第二个真实数据源前不提前抽象通用 Connector。
+- 生产金丝雀阶段固定保持 Scheduler 关闭；只有调度归属清单完成并单独授权后，才允许启动唯一 Scheduler。
+- GitHub 仓库改名和生产部署是后续独立外部操作，不因本地命名改造自动执行。

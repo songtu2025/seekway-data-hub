@@ -70,7 +70,9 @@ describe("登录态过期", () => {
 
     act(() => window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT)));
 
-    expect(await screen.findByRole("heading", { name: "SEEKWAY数据接入平台" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "SEEKWAY 数据接入中心" }),
+    ).toBeInTheDocument();
   });
 
   it("登录后恢复受保护地址的查询参数和哈希片段", async () => {
@@ -96,7 +98,9 @@ describe("登录态过期", () => {
         </AuthProvider>
       </MemoryRouter>,
     );
-    expect(await screen.findByRole("heading", { name: "SEEKWAY数据接入平台" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "SEEKWAY 数据接入中心" }),
+    ).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("邮箱"), "operator@example.com");
     await user.type(screen.getByLabelText("密码"), "safe-password");

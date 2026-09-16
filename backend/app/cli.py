@@ -18,6 +18,7 @@ from backend.app.core.config import get_web_settings
 from backend.app.core.credentials import CredentialCipher
 from backend.app.core.database import SessionLocal
 from backend.app.core.errors import ApiError
+from backend.app.core.product import PRODUCT_NAME
 from backend.app.models.jijia_account import (
     CredentialSource,
     JijiaAccount,
@@ -223,7 +224,7 @@ def _save_discovered_backfill_start(
 
 def main(argv: Sequence[str] | None = None) -> None:
     """解析 Web 服务运维命令。"""
-    parser = argparse.ArgumentParser(description="积加数据同步 Web 服务运维命令")
+    parser = argparse.ArgumentParser(description=f"{PRODUCT_NAME}运维命令")
     subparsers = parser.add_subparsers(dest="command", required=True)
     bootstrap_parser = subparsers.add_parser("bootstrap-admin", help="创建首个管理员邀请")
     bootstrap_parser.add_argument("--email", required=True, help="管理员邮箱")
