@@ -34,7 +34,7 @@
 2. 保持现有 `app/` 单体同步核心；Web 服务独立放在 `backend/` 和 `frontend/`，不得把同步核心迁入 Web 目录。
 3. Web 服务使用 FastAPI、React、TypeScript 和 Vite；不得借规范升级重构既有同步链路。
 4. `sql/init_tables.sql` 管理既有同步表；Alembic 只管理 Web 身份域和已确认的 Web 增量表，不能接管、删除或重建既有同步表。
-5. 部署使用阿里云 ECS、systemd 和 Nginx，当前不使用 Docker；legacy cron 只允许存在于平台割接过渡期，不属于最终生产架构。
+5. 部署使用阿里云 ECS、Docker Compose 和宿主机 Nginx/Certbot；PolarDB 保持外部托管，legacy cron 只允许存在于平台割接过渡期，不属于最终生产架构。
 6. 同步链路使用 `unittest`、`compileall`、`pip check`、dry-run 和差异检查；Web 范围另使用 Ruff、Mypy、pytest、Vitest、TypeScript、ESLint、Prettier 和 Vite build。
 7. 接入真实积加 API 前必须核对官方文档；文档不可访问或字段、分页语义不明确时，只能开发与具体接口无关的框架，不得猜测配置、探测或同步。
 

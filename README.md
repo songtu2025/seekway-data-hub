@@ -25,7 +25,7 @@ SEEKWAY Data Hub（SEEKWAY 数据接入中心）是公司内部的数据接入�
 本项目是既有项目，按差异合并方式接入规范。保留 `app/` 同步核心和独立的
 `backend/`、`frontend/` Web 服务；既有同步表继续由 `sql/init_tables.sql` 和
 `sql/migrations/` 管理，Alembic 只管理 Web 身份域及已确认的 Web 增量表；部署继续使用
-阿里云 ECS、systemd 和 Nginx，不引入 Docker；cron 仅用于尚未完成的平台割接过渡期，不属于最终生产架构。完整规则按根目录 `AGENTS.md` 的
+阿里云 ECS、Docker Compose 和宿主机 Nginx；cron 仅用于尚未完成的平台割接过渡期，不属于最终生产架构。完整规则按根目录 `AGENTS.md` 的
 触发条件读取，项目事实优先于公司新项目默认模板，安全、权限和生产边界不得放宽。
 
 V1.8.1 的[登录页模板](https://github.com/songtu2025/seekway-codex-standards/tree/181397ca1510db153f77695e820dcf1907062bb4/templates/seekway-login)
@@ -587,117 +587,107 @@ Web API 提供两个公开健康检查：`GET /health/live` 只证明进程存�
 曾观察过的业务记录”，列表返回这些业务记录的当前快照，因此条目上的 `batchNo` 可能
 晚于所查批次。完整形成与变化历史仍从 `raw_api_data_history.sync_batch_no` 追溯。
 
-## Web 服务 ECS 原生部署
+## Web 服务 ECS Docker Compose 部署
 
-Web 第一版直接使用 ECS 上的 systemd、Nginx 和静态前端产物，不使用 Docker。仓库提供：
+生产使用 Docker Compose 运行前端、FastAPI、Scheduler 和 Worker，宿主机 Nginx/Certbot 继续负责
+公网入口和 TLS。PolarDB、SMTP 和积加 API 均为外部服务，不在 Compose 中启动。仓库提供：
 
-- `config/ecs/seekway-datahub-api.service.example`：FastAPI，仅监听 `127.0.0.1:8000`。
-- `config/ecs/seekway-datahub-scheduler.service.example`：唯一 Scheduler，使用 `flock` 防止重复实例。
-- `config/ecs/seekway-datahub-worker@.service.example`：单 Worker 模板；生产启用 `worker-1` 至 `worker-4` 四个实例。
-- `config/ecs/nginx.conf.example`：TLS、SPA 静态资源、API/健康检查代理和登录限流。
+- `Dockerfile`：前端构建、Python 运行镜像和前端 Nginx 镜像。
+- `compose.yaml`：前端、API、唯一 Scheduler 和可按 1→2→4 扩容的 Worker。
+- `config/docker/frontend-nginx.conf`：容器内 SPA 静态资源服务。
+- `config/ecs/nginx.conf.example`：宿主机 TLS、反向代理、安全响应头和登录限流。
 
-生产运行凭据放在仅服务用户可读的 `/etc/seekway-data-hub.env`；迁移高权限凭据单独存放，
-只能由获批迁移命令读取，不能配置到 API、Scheduler 或 Worker 的 `EnvironmentFile`。两个文件都不得提交。
-三个 systemd 模板替换占位符后，分别安装为 `/etc/systemd/system/seekway-datahub-api.service`、
-`/etc/systemd/system/seekway-datahub-scheduler.service` 和
-`/etc/systemd/system/seekway-datahub-worker@.service`；Worker 模板中的 `__WORKER_PROCESSES__` 替换为 `4`，
-该值声明全部 Worker 实例数并参与连接预算校验，不会让单个 unit 自行派生子进程。
+生产运行凭据放在 `/etc/seekway-data-hub.env`，通过 `SEEKWAY_ENV_FILE` 交给 API、Scheduler 和 Worker；
+迁移高权限凭据单独存放，只能由获批的一次性迁移容器读取。两个文件都不得提交或写入镜像。
+Compose 的 `runtime` profile 默认关闭，因此普通 `docker compose up -d` 不会误启动 Scheduler 或 Worker。
 运行环境同时设置 `PUBLIC_WEB_URL=https://datahub.seekwaygroup.com`、`SESSION_COOKIE_SECURE=true`、
 `SYNC_LOCK_SCOPE=account`、`DB_POOL_SIZE=3`、`DB_MAX_OVERFLOW=2`。
 
-发布负责人在 ECS 上替换模板中的双下划线占位符后，按以下最短链路验证：
+发布负责人在 ECS 上替换 Nginx 模板中的双下划线占位符后，按以下最短链路验证：
 
 ```bash
 cd /opt/seekway-data-hub
-python3 -m venv .venv
-./.venv/bin/python -m pip install -r requirements.txt
-cd frontend && npm ci && npm run build && cd ..
+export SEEKWAY_IMAGE_TAG="$(git rev-parse --short=12 HEAD)"
+export SEEKWAY_ENV_FILE=/etc/seekway-data-hub.env
+
+docker compose config --quiet
+docker compose build frontend api
 
 # 只读枚举可能遗留的旧 unit；任一命令有输出时停止发布并先完成旧服务迁移。
 systemctl list-unit-files 'jijia-*' --no-legend
 systemctl list-units 'jijia-*' --all --no-legend
+systemctl list-unit-files 'seekway-datahub-*' --no-legend
+systemctl list-units 'seekway-datahub-*' --all --no-legend
 
-# 只执行生产配置、已发布接口和运行库 SELECT 检查，不执行迁移或业务 API。
-# 只有 API 范围检查前端产物，Scheduler 和 Worker 不依赖 frontend/dist。
-./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service api
-./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service scheduler
-./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service worker
-
-sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-api.service
-sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-scheduler.service
-sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-worker@.service
-sudo nginx -t
-sudo systemctl daemon-reload
-sudo systemctl disable --now seekway-datahub-scheduler
-sudo systemctl enable seekway-datahub-api seekway-datahub-worker@worker-1 nginx
-
-# 第一阶段：先确认 API 与数据库就绪，再启动 worker-1；Scheduler 保持关闭。
-sudo systemctl start seekway-datahub-api
+# API 容器启动前自动执行只读 release_preflight，不执行迁移或业务 API。
+docker compose up -d frontend api
+docker compose ps
+curl --fail http://127.0.0.1:8080/_container_health
 curl --fail http://127.0.0.1:8000/health/ready
-sudo systemctl start seekway-datahub-worker@worker-1
-curl --fail --silent http://127.0.0.1:8000/health/worker | ./.venv/bin/python -c \
-  'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 1), data'
+
+sudo nginx -t
 sudo systemctl reload-or-restart nginx
 
+# 第一阶段：先确认 API 与数据库就绪，再启动 worker-1；Scheduler 保持关闭。
+docker compose --profile runtime up -d --no-deps --scale worker=1 worker
+curl --fail --silent http://127.0.0.1:8000/health/worker | python3 -c \
+  'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 1), data'
+
 # 第二阶段：worker-1 验收通过后扩至两个 Worker。
-sudo systemctl start seekway-datahub-worker@worker-2
-curl --fail --silent http://127.0.0.1:8000/health/worker | ./.venv/bin/python -c \
+docker compose --profile runtime up -d --no-deps --scale worker=2 worker
+curl --fail --silent http://127.0.0.1:8000/health/worker | python3 -c \
   'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 2), data'
-systemctl is-active seekway-datahub-api seekway-datahub-worker@worker-{1..2} nginx
+docker compose --profile runtime ps
 
 # 第三阶段：两个 Worker 验收通过后扩至四个 Worker。
-sudo systemctl start seekway-datahub-worker@worker-{3..4}
-curl --fail --silent http://127.0.0.1:8000/health/worker | ./.venv/bin/python -c \
+docker compose --profile runtime up -d --no-deps --scale worker=4 worker
+curl --fail --silent http://127.0.0.1:8000/health/worker | python3 -c \
   'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 4), data'
-systemctl is-active seekway-datahub-api seekway-datahub-worker@worker-{1..4} nginx
-
-# 四个 Worker 验收通过后，才允许把 worker-2 至 worker-4 设为开机自启。
-sudo systemctl enable seekway-datahub-worker@worker-{2..4}
+docker compose --profile runtime ps
 curl --fail https://datahub.seekwaygroup.com/health/ready
 curl --fail https://datahub.seekwaygroup.com/health/worker
 ```
 
-以上两条旧 unit 检查只读取 systemd 状态，不自动停止或删除服务。发现旧 API、Scheduler 或 Worker 时，
+以上旧 unit 检查只读取 systemd 状态，不自动停止或删除服务。发现旧 API、Scheduler 或 Worker 时，
 必须停止本次发布，核对任务所有权并另行批准迁移；旧 Scheduler 未退出前禁止启动新 Scheduler。
 
 上述金丝雀阶段始终保持 Scheduler 关闭。只有完成 legacy 调度归属清单、确认目标策略没有其他
-调度所有者并取得单独授权后，才允许执行 `sudo systemctl enable --now seekway-datahub-scheduler`；
+调度所有者并取得单独授权后，才允许执行 `docker compose --profile runtime up -d scheduler`；
 先观察一个策略的两个完整周期，再逐项扩大。
 
 `release_preflight` 通过只代表当前生产配置、YAML、数据库中的已发布接口和运行数据库目标符合启动条件；
 API 范围还要求前端产物完整。它不代表批准迁移或部署。
 `0003` 仍必须先在隔离副本完成演练，并由部署负责人单独授权。
-默认运行 `seekway-datahub-worker@worker-1` 至 `seekway-datahub-worker@worker-4` 四个独立 systemd 实例。
+生产最终运行四个 Worker 容器，Compose 通过副本数控制 1→2→4 灰度。
 同账号仍由账号锁串行；不同账号可并发。所有账号、进程和服务对相同接口共享数据库限流器，
 HTTP 401 重试和 429 冷却也进入同一时间线。扩容前必须按
 `(API 进程数 + Scheduler 进程数 + Worker 子进程数) × (DB_POOL_SIZE + DB_MAX_OVERFLOW)`
 核对数据库连接预算，并严格按 1→2→4 扩容。每一阶段必须同时满足健康计数准确、队列能够回落，
-且 journald 没有新增 429、数据库连接异常或任务所有权异常，才允许进入下一阶段；失败时停止本阶段新增 Worker，
+且容器日志没有新增 429、数据库连接异常或任务所有权异常，才允许进入下一阶段；失败时缩回上一稳定副本数，
 回到上一稳定档位。
-服务日志统一进入 journald：
+服务日志由 Docker 收集并限制单文件大小：
 
 ```bash
-journalctl -u seekway-datahub-api -u seekway-datahub-scheduler -u 'seekway-datahub-worker@worker-*' --since "2 hours ago"
+docker compose --profile runtime logs --since 2h api scheduler worker
 ```
 
-应用或 unit 回滚时先停止领取和生成新任务，恢复上一版本应用、前端产物、运行 `.env` 和 unit 文件后，
+应用回滚时先停止领取和生成新任务，切换到上一提交对应的镜像标签后，
 按同一顺序重新验证；本流程不执行 Alembic downgrade，也不替代已批准的数据库恢复方案：
 
 ```bash
-sudo systemctl stop seekway-datahub-worker@worker-{1..4} seekway-datahub-scheduler seekway-datahub-api
-# 恢复上一版本应用、frontend/dist、运行 .env 和三个 systemd unit。
-sudo systemctl disable seekway-datahub-worker@worker-{2..4}
-sudo systemctl daemon-reload
-sudo systemctl start seekway-datahub-api
+docker compose --profile runtime stop scheduler worker
+export SEEKWAY_IMAGE_TAG=<上一稳定提交的短 SHA>
+docker compose up -d frontend api
 curl --fail http://127.0.0.1:8000/health/ready
-sudo systemctl start seekway-datahub-worker@worker-1
+docker compose --profile runtime up -d --no-deps --scale worker=1 worker
 curl --fail http://127.0.0.1:8000/health/worker
 sudo nginx -t
 sudo systemctl reload-or-restart nginx
-systemctl is-active seekway-datahub-api seekway-datahub-worker@worker-1 nginx
+docker compose --profile runtime ps
 curl --fail https://datahub.seekwaygroup.com/health/ready
 curl --fail https://datahub.seekwaygroup.com/health/worker
 ```
 
 Worker 收到停止信号后不再领取新任务，并给当前长任务最多 3 小时完成。
-当前仓库只完成本地部署就绪验证，尚未在真实 ECS、Nginx 或 PolarDB 上执行。
+回滚和日常停止不得使用 `docker compose down -v`，避免删除持久日志卷。
+当前仓库只完成容器部署配置，尚未在真实 PolarDB 上执行迁移或启动生产同步。

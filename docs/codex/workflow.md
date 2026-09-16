@@ -11,7 +11,7 @@
 - 生产环境：阿里云 ECS
 - 前端：React 19、TypeScript、Vite；保留项目现有基础组件和主题，不因公司新项目默认值迁移 Ant Design
 - 后端：Python、FastAPI、Pydantic、SQLAlchemy、Alembic、pytest、Ruff，以及项目选择的 Mypy 或 Pyright
-- 新项目默认部署：Docker、Docker Compose、Nginx；本项目按已确认差异使用 ECS、systemd 和 Nginx，不引入 Docker
+- 新项目默认部署：Docker、Docker Compose、Nginx；本项目使用 ECS、Docker Compose 和宿主机 Nginx/Certbot
 
 未经明确批准，不得更换项目已经采用的前端或后端框架、数据库访问或迁移方案、部署方式，不得引入新的基础设施组件或生产依赖。
 

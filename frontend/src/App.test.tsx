@@ -171,6 +171,21 @@ describe("M3 路由权限", () => {
     expect(api.getDashboard).not.toHaveBeenCalled();
   });
 
+  it("恢复登录状态时显示不包含业务数据的应用骨架", () => {
+    authState.ready = false;
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("SEEKWAY 数据接入中心")).toBeInTheDocument();
+    expect(screen.getByText("正在恢复登录状态…")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "运营收件箱" })).not.toBeInTheDocument();
+    expect(api.getDashboard).not.toHaveBeenCalled();
+  });
+
   it("所有已登录角色都可以进入账号工作台", async () => {
     render(
       <MemoryRouter initialEntries={["/accounts/8"]}>

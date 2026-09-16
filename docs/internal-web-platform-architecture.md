@@ -15,7 +15,7 @@
 
 - 保留现有 `app/` 同步核心，不将同步逻辑迁入 Web 目录。
 - 保留 FastAPI、React、TypeScript、Vite 和 PolarDB MySQL 技术栈。
-- 保持 ECS、Nginx、systemd 原生部署，不引入 Docker。
+- 生产使用 ECS、Docker Compose 和宿主机 Nginx/Certbot，PolarDB 保持外部托管。
 - 当前使用数据库任务队列和四个独立 Worker 实例，不引入 Redis、Celery 或 Kafka。
 - 优先解决调度归属、配置事实来源和同步核心职责过重的问题。
 - 采用渐进式改造，不进行一次性重写。
@@ -438,7 +438,7 @@ app/api_executor.py
 ```text
 Nginx
 FastAPI API service
-Four systemd Worker instances
+Four Docker Compose Worker replicas
 PolarDB MySQL
 ```
 

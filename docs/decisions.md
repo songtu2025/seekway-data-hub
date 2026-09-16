@@ -3340,3 +3340,12 @@
 - 积加是首个真实数据源连接器，`JIJIA_*` 环境变量、积加业务模型、数据库表和同步核心保持原名；没有第二个真实数据源前不提前抽象通用 Connector。
 - 生产金丝雀阶段固定保持 Scheduler 关闭；只有调度归属清单完成并单独授权后，才允许启动唯一 Scheduler。
 - GitHub 仓库改名和生产部署是后续独立外部操作，不因本地命名改造自动执行。
+
+## 2026-09-16 Docker Compose 部署决策
+
+- 用户明确批准将生产部署从 ECS 原生 systemd 改为 Docker Compose；本节覆盖此前“不引入 Docker”的部署裁决，但不改变 Web、Scheduler、数据库队列、Worker 和同步内核边界。
+- 宿主机 Nginx/Certbot 继续统一管理公网入口和 TLS；前端与 API 只映射回环端口，Scheduler 和 Worker 不暴露宿主机端口。
+- API、Scheduler 和 Worker 复用同一非 root Python 镜像；前端使用独立的静态 Nginx 镜像。Compose 默认只启动前端和 API，`runtime` profile 必须显式启用。
+- Worker 保持 1→2→4 灰度，使用 Compose 副本数扩容；Scheduler 保持唯一实例，并且只能在 legacy 调度归属完成和单独授权后启动。
+- PolarDB、SMTP 和积加 API 保持外部服务；生产迁移不随容器启动自动执行，迁移高权限配置不得进入日常运行容器。
+- 镜像使用提交 SHA 标记并保留上一稳定版本；宿主机不把项目运行用户加入 `docker` 组，避免扩大 Docker 守护进程权限。

@@ -11,7 +11,7 @@
 1. 同步核心保持在 `app/`，支持鉴权、分页、限流、重试、日志、批次和 checkpoint。
 2. API 清单继续使用 YAML 和数据库发布配置；敏感凭据只从 `.env` 或环境变量读取。
 3. Web 服务位于 `backend/` 和 `frontend/`，只通过既有边界调用同步能力。
-4. 数据访问优先复用现有 SQLAlchemy 实现，部署保持 ECS、systemd/cron 和 Nginx。
+4. 数据访问优先复用现有 SQLAlchemy 实现，部署使用 ECS、Docker Compose 和宿主机 Nginx/Certbot。
 5. 原始 JSON 备份是第一优先级；订单、商品和库存等 transformer 只能按已确认需求增加。
 
 ## 2. 积加接口接入规则

@@ -1,0 +1,113 @@
+name: seekway-data-hub
+
+x-app-service: &app-service
+  image: seekway-data-hub-app:${SEEKWAY_IMAGE_TAG:-local}
+  build:
+    context: .
+    target: app-runtime
+  env_file:
+    - ${SEEKWAY_ENV_FILE:-/etc/seekway-data-hub.env}
+  init: true
+  restart: on-failure
+  read_only: true
+  tmpfs:
+    - /tmp:size=67108864,mode=1777
+  volumes:
+    - seekway_logs:/app/logs
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "5"
+  networks:
+    - app
+
+services:
+  frontend:
+    image: seekway-data-hub-frontend:${SEEKWAY_IMAGE_TAG:-local}
+    build:
+      context: .
+      target: frontend-runtime
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=67108864,mode=1777
+    ports:
+      - "127.0.0.1:${SEEKWAY_FRONTEND_PORT:-8080}:8080"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:8080/_container_health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+    networks:
+      - app
+
+  api:
+    <<: *app-service
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        python -m backend.app.release_preflight --confirm-read-only-database --service api
+        exec python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --workers "$${API_WORKERS:-2}"
+    ports:
+      - "127.0.0.1:${SEEKWAY_API_PORT:-8000}:8000"
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+
+  scheduler:
+    <<: *app-service
+    profiles:
+      - runtime
+    container_name: seekway-datahub-scheduler
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        python -m backend.app.release_preflight --confirm-read-only-database --service scheduler
+        exec python -m backend.app.scheduler
+    stop_grace_period: 30s
+
+  worker:
+    <<: *app-service
+    profiles:
+      - runtime
+    environment:
+      WORKER_NAME: ""
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        python -m backend.app.release_preflight --confirm-read-only-database --service worker
+        exec python -m backend.app.worker
+    stop_grace_period: 3h
+
+volumes:
+  seekway_logs:
+
+networks:
+  app:
