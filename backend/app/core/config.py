@@ -43,6 +43,7 @@ class WebSettings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""
     smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -52,6 +53,7 @@ class WebSettings(BaseSettings):
         environment = self.app_env.lower()
         _apply_lan_public_url(self, environment)
         _validate_worker_timing(self)
+        _validate_smtp_security(self)
         if environment in {"prod", "production"}:
             _validate_production_web_and_mail(self)
             _validate_production_credentials(self)
@@ -82,6 +84,12 @@ def _validate_worker_timing(settings: WebSettings) -> None:
         raise ValueError("Worker stale window must cover at least three heartbeats")
 
 
+def _validate_smtp_security(settings: WebSettings) -> None:
+    """拒绝同时启用隐式 SSL 和 STARTTLS。"""
+    if settings.smtp_use_ssl and settings.smtp_use_tls:
+        raise ValueError("SMTP_USE_SSL and SMTP_USE_TLS cannot both be true")
+
+
 def _validate_production_web_and_mail(settings: WebSettings) -> None:
     """校验生产公开地址和邮件传输配置。"""
     if settings.mail_provider != "smtp":
@@ -93,8 +101,8 @@ def _validate_production_web_and_mail(settings: WebSettings) -> None:
         raise ValueError("Production requires SMTP_HOST")
     if not settings.smtp_from.strip():
         raise ValueError("Production requires SMTP_FROM")
-    if not settings.smtp_use_tls:
-        raise ValueError("Production requires SMTP_USE_TLS=true")
+    if not settings.smtp_use_tls and not settings.smtp_use_ssl:
+        raise ValueError("Production requires encrypted SMTP")
 
 
 def _validate_production_credentials(settings: WebSettings) -> None:

@@ -88,6 +88,61 @@ def test_smtp_starttls_uses_verified_default_context_before_login_and_send(
     assert events == ["starttls", "login", "send"] * 2
 
 
+def test_smtp_ssl_uses_verified_context_without_starttls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """隐式 SSL 使用证书校验上下文，且不再升级 STARTTLS。"""
+    events: list[str] = []
+    connection: dict[str, object] = {}
+    client = FakeSmtpClient(events)
+
+    def fake_smtp_ssl(
+        host: str,
+        port: int,
+        *,
+        timeout: float | None = None,
+        context: ssl.SSLContext | None = None,
+    ) -> FakeSmtpClient:
+        connection.update(host=host, port=port, timeout=timeout, context=context)
+        client.tls_context = context
+        return client
+
+    monkeypatch.setattr(mail_service.smtplib, "SMTP_SSL", fake_smtp_ssl)
+    monkeypatch.setattr(
+        mail_service.smtplib,
+        "SMTP",
+        lambda *_args, **_kwargs: pytest.fail("隐式 SSL 分支不得创建普通 SMTP 连接"),
+    )
+    settings = WebSettings(
+        _env_file=None,
+        mail_provider="smtp",
+        smtp_host="smtp.example.com",
+        smtp_port=465,
+        smtp_from="no-reply@example.com",
+        smtp_user="mailer",
+        smtp_password="placeholder-password",
+        smtp_use_tls=False,
+        smtp_use_ssl=True,
+    )
+
+    SmtpMailSender(settings).send_invitation(
+        "user@example.com",
+        "viewer",
+        "https://sync.example.com/register#synthetic",
+    )
+
+    assert client.tls_context is not None
+    assert client.tls_context.verify_mode == ssl.CERT_REQUIRED
+    assert client.tls_context.check_hostname is True
+    assert connection == {
+        "host": "smtp.example.com",
+        "port": 465,
+        "timeout": 30,
+        "context": client.tls_context,
+    }
+    assert events == ["login", "send"]
+
+
 def test_smtp_mail_subjects_use_product_name(monkeypatch: pytest.MonkeyPatch) -> None:
     client = FakeSmtpClient([])
     monkeypatch.setattr(mail_service.smtplib, "SMTP", lambda *_args, **_kwargs: client)
@@ -243,6 +298,27 @@ def test_production_accepts_complete_runtime_settings() -> None:
     assert settings.app_env == "production"
 
 
+def test_production_accepts_smtp_ssl() -> None:
+    """生产环境允许使用隐式 SSL 作为唯一加密方式。"""
+    settings = WebSettings.model_validate(
+        {
+            "app_env": "production",
+            "public_web_url": "https://sync.example.com",
+            "mail_provider": "smtp",
+            "smtp_host": "smtp.example.com",
+            "smtp_port": 465,
+            "smtp_from": "no-reply@example.com",
+            "smtp_use_tls": False,
+            "smtp_use_ssl": True,
+            "session_cookie_name": "__Host-jijia_session",
+            "session_cookie_secure": True,
+            "credential_encryption_key": Fernet.generate_key().decode("ascii"),
+        }
+    )
+
+    assert settings.smtp_use_ssl is True
+
+
 def test_local_lan_url_overrides_invitation_base_url() -> None:
     settings = WebSettings(
         _env_file=None,
@@ -263,7 +339,8 @@ def test_lan_url_is_rejected_outside_local_mode() -> None:
         )
 
 
-def test_production_rejects_smtp_without_tls() -> None:
+def test_production_rejects_smtp_without_encryption() -> None:
+    """生产环境拒绝未启用任何传输加密的 SMTP。"""
     with pytest.raises(ValidationError):
         WebSettings.model_validate(
             {
@@ -276,6 +353,17 @@ def test_production_rejects_smtp_without_tls() -> None:
                 "session_cookie_name": "__Host-jijia_session",
                 "session_cookie_secure": True,
                 "credential_encryption_key": Fernet.generate_key().decode("ascii"),
+            }
+        )
+
+
+def test_smtp_rejects_ssl_and_starttls_together() -> None:
+    """同一连接不能同时配置隐式 SSL 和 STARTTLS。"""
+    with pytest.raises(ValidationError):
+        WebSettings.model_validate(
+            {
+                "smtp_use_tls": True,
+                "smtp_use_ssl": True,
             }
         )
 
