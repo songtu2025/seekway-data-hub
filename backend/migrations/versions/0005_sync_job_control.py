@@ -5,6 +5,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from backend.migrations.compat import supports_named_check_constraints
+
 revision: str = "0005_sync_job_control"
 down_revision: str | None = "0004_sync_job_cancelled"
 branch_labels: str | Sequence[str] | None = None
@@ -21,6 +23,7 @@ OLD_STATUS_CHECK = (
 
 def upgrade() -> None:
     """扩展 Web 控制表，不修改既有同步业务表。"""
+    supports_check_constraints = supports_named_check_constraints(op.get_bind())
     with op.batch_alter_table("sync_job") as batch_op:
         batch_op.add_column(sa.Column("task_no", sa.String(length=64), nullable=True))
         batch_op.add_column(sa.Column("task_start", sa.Date(), nullable=True))
@@ -40,8 +43,9 @@ def upgrade() -> None:
         )
         batch_op.add_column(sa.Column("pause_requested_at", sa.DateTime(), nullable=True))
         batch_op.add_column(sa.Column("paused_at", sa.DateTime(), nullable=True))
-        batch_op.drop_constraint("ck_sync_job_status", type_="check")
-        batch_op.create_check_constraint("ck_sync_job_status", NEW_STATUS_CHECK)
+        if supports_check_constraints:
+            batch_op.drop_constraint("ck_sync_job_status", type_="check")
+            batch_op.create_check_constraint("ck_sync_job_status", NEW_STATUS_CHECK)
     op.create_index("idx_sync_job_task_no", "sync_job", ["task_no", "id"])
 
 
@@ -64,10 +68,12 @@ def downgrade() -> None:
     ).scalar_one_or_none()
     if evidence_exists is not None:
         raise RuntimeError("0005 downgrade blocked: sync job control evidence exists")
+    supports_check_constraints = supports_named_check_constraints(connection)
     op.drop_index("idx_sync_job_task_no", table_name="sync_job")
     with op.batch_alter_table("sync_job") as batch_op:
-        batch_op.drop_constraint("ck_sync_job_status", type_="check")
-        batch_op.create_check_constraint("ck_sync_job_status", OLD_STATUS_CHECK)
+        if supports_check_constraints:
+            batch_op.drop_constraint("ck_sync_job_status", type_="check")
+            batch_op.create_check_constraint("ck_sync_job_status", OLD_STATUS_CHECK)
         batch_op.drop_column("paused_at")
         batch_op.drop_column("pause_requested_at")
         batch_op.drop_column("stop_after_current")
