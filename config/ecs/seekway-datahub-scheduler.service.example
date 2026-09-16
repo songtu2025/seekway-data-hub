@@ -1,5 +1,5 @@
 [Unit]
-Description=积加数据同步 Worker %i
+Description=SEEKWAY Data Hub Scheduler
 Wants=network-online.target
 After=network-online.target
 
@@ -9,15 +9,15 @@ User=__SERVICE_USER__
 Group=__SERVICE_USER__
 WorkingDirectory=__PROJECT_ROOT__
 EnvironmentFile=__ENV_FILE__
-Environment=WORKER_PROCESSES=__WORKER_PROCESSES__
-Environment=WORKER_NAME=%i
 Environment=PYTHONUNBUFFERED=1
-ExecStartPre=__PROJECT_ROOT__/.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service worker
-ExecStart=__PROJECT_ROOT__/.venv/bin/python -m backend.app.worker
+RuntimeDirectory=seekway-data-hub
+RuntimeDirectoryMode=0750
+ExecStartPre=__PROJECT_ROOT__/.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service scheduler
+ExecStart=/usr/bin/flock --no-fork --nonblock /run/seekway-data-hub/scheduler.lock __PROJECT_ROOT__/.venv/bin/python -m backend.app.scheduler
 Restart=on-failure
 RestartSec=5
 KillSignal=SIGTERM
-TimeoutStopSec=3h
+TimeoutStopSec=30
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

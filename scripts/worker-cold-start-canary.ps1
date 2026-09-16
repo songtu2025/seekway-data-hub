@@ -17,7 +17,7 @@ $envPath = Join-Path $projectRoot ".env.localtest"
 $apiHealthUrl = "http://127.0.0.1:8004/health/worker"
 $logRoot = Join-Path `
     ([System.IO.Path]::GetTempPath()) `
-    ("jijia-worker-canary-" + [guid]::NewGuid().ToString("N"))
+    ("seekway-datahub-worker-canary-" + [guid]::NewGuid().ToString("N"))
 
 function Import-LocalTestEnvironment {
     Get-Content -LiteralPath $envPath | ForEach-Object {

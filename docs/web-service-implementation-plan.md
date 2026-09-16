@@ -1,4 +1,4 @@
-# 积加数据同步 Web 服务完整实施方案
+# SEEKWAY Data Hub 完整实施方案
 
 > 现行部署基线覆盖说明（2026-08-26）：根目录 `AGENTS.md` 已确认生产继续使用
 > 阿里云 ECS + systemd，不引入 Docker。本文早期 M4 中的 Dockerfile、
@@ -17,7 +17,7 @@
 项目只有两个宏观阶段：
 
 1. **积加 API 同步工具（历史基础）**：沉淀鉴权、请求、分页、重试、落库和 checkpoint 能力，不再作为最终产品入口。
-2. **积加数据同步管理平台（当前且唯一目标）**：复用第一阶段同步内核，对外提供账号、策略、调度、任务、权限、审计和查询能力。
+2. **SEEKWAY 数据接入中心（当前且唯一目标）**：积加作为首个数据源连接器，复用第一阶段同步内核，对外提供账号、策略、调度、任务、权限、审计和查询能力。
 
 本方案中的阶段 0、M1～M4 都是第二阶段内部里程碑，不是新的宏观项目阶段。
 
@@ -40,7 +40,7 @@
 
 ### 2.1 服务定位
 
-这是一个面向内部运营、数据和技术人员的积加数据同步管理平台，负责：
+这是一个面向内部运营、数据和技术人员的 SEEKWAY 数据接入中心，当前以积加作为首个数据源连接器，负责：
 
 1. 管理多个积加开放平台账号。
 2. 管理每个账号、每个接口的同步策略。
@@ -183,7 +183,7 @@ Content-Type: application/json
 ## 6. 目标目录结构
 
 ```text
-jijia-polardb-sync/
+seekway-data-hub/
   app/                              # 现有同步内核，第一版保留
   config/                           # 积加官方接口目录及示例配置
   sql/                              # 当前初始化 SQL，保留用于基线参考
@@ -256,8 +256,9 @@ jijia-polardb-sync/
     check.ps1
 
   config/ecs/
-    jijia-api.service.example
-    jijia-worker.service.example
+    seekway-datahub-api.service.example
+    seekway-datahub-scheduler.service.example
+    seekway-datahub-worker@.service.example
     nginx.conf.example
   .env.example
   .env.migration.example
@@ -1248,11 +1249,14 @@ git diff --check
 
 ```bash
 cd frontend && npm ci && npm run build && cd ..
-./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database
-sudo systemd-analyze verify /etc/systemd/system/jijia-api.service
-sudo systemd-analyze verify /etc/systemd/system/jijia-worker.service
+./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service api
+./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service scheduler
+./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service worker
+sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-api.service
+sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-scheduler.service
+sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-worker@.service
 sudo nginx -t
-curl --fail https://sync.example.com/health/ready
+curl --fail https://datahub.seekwaygroup.com/health/ready
 ```
 
 实际发布时，migration 必须在数据库备份完成且 Worker 停止领取新任务后执行。

@@ -27,7 +27,7 @@ def test_nginx_config_keeps_api_out_of_spa_fallback() -> None:
     assert login_location < reset_location < api_location < fallback_location
     assert health_location < fallback_location
     assert text.count("limit_req zone=login_per_ip") == 2
-    assert text.count("proxy_pass http://jijia_web_api;") == 4
+    assert text.count("proxy_pass http://seekway_datahub_api;") == 4
     assert "try_files $uri $uri/ /index.html;" in text
     assert 'default "no-store";' in text
     assert '"public, max-age=31536000, immutable"' in text
@@ -45,9 +45,9 @@ def test_frontend_build_uses_pinned_node_contract_and_clean_install() -> None:
 
 def test_ecs_services_use_scoped_preflight_and_worker_template_contract() -> None:
     service_scopes = {
-        "jijia-api.service.example": "api",
-        "jijia-scheduler.service.example": "scheduler",
-        "jijia-worker@.service.example": "worker",
+        "seekway-datahub-api.service.example": "api",
+        "seekway-datahub-scheduler.service.example": "scheduler",
+        "seekway-datahub-worker@.service.example": "worker",
     }
 
     for file_name, service_scope in service_scopes.items():
@@ -56,52 +56,68 @@ def test_ecs_services_use_scoped_preflight_and_worker_template_contract() -> Non
             f"backend.app.release_preflight --confirm-read-only-database --service {service_scope}"
         ) in service
 
-    worker = (PROJECT_ROOT / "config" / "ecs" / "jijia-worker@.service.example").read_text("utf-8")
+    worker = (
+        PROJECT_ROOT / "config" / "ecs" / "seekway-datahub-worker@.service.example"
+    ).read_text("utf-8")
     assert "Environment=WORKER_NAME=%i" in worker
 
 
 def test_ecs_readme_uses_one_two_four_worker_canary_and_single_worker_rollback() -> None:
     readme = README.read_text("utf-8")
 
-    assert "jijia-worker.service.example" not in readme
+    assert "seekway-datahub-worker.service.example" not in readme
     for expected in (
-        "jijia-api.service",
-        "jijia-scheduler.service",
-        "jijia-worker@.service",
-        "jijia-worker@worker-1",
-        "jijia-worker@worker-{1..4}",
-        "jijia-worker@worker-{2..4}",
+        "seekway-datahub-api.service",
+        "seekway-datahub-scheduler.service",
+        "seekway-datahub-worker@.service",
+        "seekway-datahub-worker@worker-1",
+        "seekway-datahub-worker@worker-{1..4}",
+        "seekway-datahub-worker@worker-{2..4}",
         "--service api",
         "--service scheduler",
         "--service worker",
         "/health/ready",
         "/health/worker",
-        "journalctl -u jijia-api -u jijia-scheduler -u 'jijia-worker@worker-*'",
-        "sudo systemctl enable jijia-api jijia-scheduler jijia-worker@worker-1 nginx",
-        "sudo systemctl start jijia-scheduler jijia-worker@worker-1",
-        "sudo systemctl start jijia-worker@worker-2",
-        "sudo systemctl start jijia-worker@worker-{3..4}",
-        "sudo systemctl enable jijia-worker@worker-{2..4}",
+        "systemctl list-unit-files 'jijia-*' --no-legend",
+        "systemctl list-units 'jijia-*' --all --no-legend",
+        "journalctl -u seekway-datahub-api -u seekway-datahub-scheduler "
+        "-u 'seekway-datahub-worker@worker-*'",
+        "sudo systemctl disable --now seekway-datahub-scheduler",
+        "sudo systemctl enable seekway-datahub-api seekway-datahub-worker@worker-1 nginx",
+        "sudo systemctl start seekway-datahub-worker@worker-1",
+        "sudo systemctl start seekway-datahub-worker@worker-2",
+        "sudo systemctl start seekway-datahub-worker@worker-{3..4}",
+        "sudo systemctl enable seekway-datahub-worker@worker-{2..4}",
         "== (4, 1), data",
         "== (4, 2), data",
         "== (4, 4), data",
-        "sudo systemctl stop jijia-worker@worker-{1..4} jijia-scheduler jijia-api",
+        "sudo systemctl stop seekway-datahub-worker@worker-{1..4} "
+        "seekway-datahub-scheduler seekway-datahub-api",
         "sudo systemctl reload-or-restart nginx",
+        "https://datahub.seekwaygroup.com/health/ready",
     ):
         assert expected in readme
-    assert (
-        "sudo systemctl enable jijia-api jijia-scheduler jijia-worker@worker-{1..4}" not in readme
+    assert "sudo systemctl enable seekway-datahub-api seekway-datahub-scheduler" not in readme
+    assert "sudo systemctl start seekway-datahub-scheduler seekway-datahub-worker" not in readme
+    assert "sudo systemctl stop jijia-" not in readme
+    legacy_unit_checks = (
+        "systemctl list-unit-files 'jijia-*' --no-legend",
+        "systemctl list-units 'jijia-*' --all --no-legend",
     )
-    assert "sudo systemctl start jijia-scheduler jijia-worker@worker-{1..4}" not in readme
+    assert all(
+        readme.index(check) < readme.index("sudo systemctl disable --now seekway-datahub-scheduler")
+        for check in legacy_unit_checks
+    )
     canary_steps = (
-        "sudo systemctl enable jijia-api jijia-scheduler jijia-worker@worker-1 nginx",
-        "sudo systemctl start jijia-scheduler jijia-worker@worker-1",
+        "sudo systemctl disable --now seekway-datahub-scheduler",
+        "sudo systemctl enable seekway-datahub-api seekway-datahub-worker@worker-1 nginx",
+        "sudo systemctl start seekway-datahub-worker@worker-1",
         "== (4, 1), data",
-        "sudo systemctl start jijia-worker@worker-2",
+        "sudo systemctl start seekway-datahub-worker@worker-2",
         "== (4, 2), data",
-        "sudo systemctl start jijia-worker@worker-{3..4}",
+        "sudo systemctl start seekway-datahub-worker@worker-{3..4}",
         "== (4, 4), data",
-        "sudo systemctl enable jijia-worker@worker-{2..4}",
+        "sudo systemctl enable seekway-datahub-worker@worker-{2..4}",
     )
     assert [readme.index(step) for step in canary_steps] == sorted(
         readme.index(step) for step in canary_steps

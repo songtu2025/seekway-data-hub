@@ -30,6 +30,7 @@ from backend.app.api.v1 import (
 from backend.app.core.config import WebSettings, get_web_settings
 from backend.app.core.database import engine, get_db
 from backend.app.core.errors import ApiError
+from backend.app.core.product import PRODUCT_NAME
 from backend.app.core.service_logging import configure_service_logging
 from backend.app.services.runtime_startup_service import (
     PRODUCTION_ENVIRONMENTS,
@@ -185,7 +186,7 @@ def _register_routes(app: FastAPI) -> None:
 def create_app(validate_settings: bool = True) -> FastAPI:
     """创建不执行同步任务的 FastAPI 管理服务。"""
     app = FastAPI(
-        title="积加数据同步 Web 服务",
+        title=f"{PRODUCT_NAME} API",
         version="0.1.0",
         lifespan=lifespan if validate_settings else None,
     )

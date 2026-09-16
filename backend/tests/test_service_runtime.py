@@ -42,11 +42,15 @@ def test_service_logging_emits_application_info_without_exception_text() -> None
 
 
 def test_native_ecs_service_templates_use_bounded_api_workers_and_journal_only() -> None:
-    api = (ROOT / "config" / "ecs" / "jijia-api.service.example").read_text(encoding="utf-8")
-    scheduler = (ROOT / "config" / "ecs" / "jijia-scheduler.service.example").read_text(
+    api = (ROOT / "config" / "ecs" / "seekway-datahub-api.service.example").read_text(
         encoding="utf-8"
     )
-    worker = (ROOT / "config" / "ecs" / "jijia-worker@.service.example").read_text(encoding="utf-8")
+    scheduler = (ROOT / "config" / "ecs" / "seekway-datahub-scheduler.service.example").read_text(
+        encoding="utf-8"
+    )
+    worker = (ROOT / "config" / "ecs" / "seekway-datahub-worker@.service.example").read_text(
+        encoding="utf-8"
+    )
 
     for service in (api, scheduler, worker):
         assert "User=__SERVICE_USER__" in service
@@ -64,13 +68,13 @@ def test_native_ecs_service_templates_use_bounded_api_workers_and_journal_only()
     assert api.index("Environment=API_WORKERS=2") < api.index("EnvironmentFile=__ENV_FILE__")
     assert "--workers ${API_WORKERS}" in api
     assert "--reload" not in api
-    assert "RuntimeDirectory=jijia-polardb-sync" in scheduler
+    assert "RuntimeDirectory=seekway-data-hub" in scheduler
     assert "/usr/bin/flock --no-fork --nonblock" in scheduler
     assert "python -m backend.app.scheduler" in scheduler
     assert "scheduler.lock" in scheduler
     assert "TimeoutStopSec=30" in scheduler
     assert "python -m backend.app.worker" in worker
-    assert "Description=积加数据同步 Worker %i" in worker
+    assert "Description=SEEKWAY Data Hub Worker %i" in worker
     assert "Environment=WORKER_PROCESSES=__WORKER_PROCESSES__" in worker
     assert "Environment=WORKER_NAME=%i" in worker
     assert "worker.lock" not in worker

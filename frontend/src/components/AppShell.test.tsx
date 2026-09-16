@@ -85,7 +85,7 @@ describe("应用外壳退出", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("SEEKWAY数据接入平台")).toBeInTheDocument();
+    expect(screen.getByText("SEEKWAY 数据接入中心")).toBeInTheDocument();
     expect(document.querySelector(".brand-mark--image")).toHaveAttribute("src", "/favicon.svg");
     expect(await screen.findByRole("status")).toHaveTextContent("任务执行服务离线");
     expect(screen.getByRole("link", { name: "查看执行服务" })).toHaveAttribute(

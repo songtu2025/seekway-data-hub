@@ -5,6 +5,7 @@ from email.message import EmailMessage
 from typing import Protocol
 
 from backend.app.core.config import WebSettings
+from backend.app.core.product import PRODUCT_NAME
 
 SMTP_TIMEOUT_SECONDS = 30
 
@@ -27,7 +28,7 @@ class SmtpMailSender:
 
     def send_invitation(self, email: str, role: str, invitation_url: str) -> None:
         message = EmailMessage()
-        message["Subject"] = "积加数据同步邀请"
+        message["Subject"] = f"{PRODUCT_NAME}邀请"
         message["From"] = self.settings.smtp_from
         message["To"] = email
         message.set_content(
@@ -38,7 +39,7 @@ class SmtpMailSender:
 
     def send_password_reset(self, email: str, reset_url: str) -> None:
         message = EmailMessage()
-        message["Subject"] = "积加数据同步平台密码重置"
+        message["Subject"] = f"{PRODUCT_NAME}密码重置"
         message["From"] = self.settings.smtp_from
         message["To"] = email
         message.set_content(f"请使用以下一次性链接重置登录密码：\n{reset_url}")
