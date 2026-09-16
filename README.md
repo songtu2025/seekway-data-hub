@@ -1,6 +1,6 @@
 # jijia-polardb-sync
 
-这是公司内部使用的积加数据同步管理平台。平台通过 Web 管理积加账号、接口策略、定时任务、运行记录和数据查询，并由 Scheduler、数据库任务队列和单 Worker 将积加开放平台数据同步到 PolarDB MySQL。
+这是公司内部使用的积加数据同步管理平台。平台通过 Web 管理积加账号、接口策略、定时任务、运行记录和数据查询，并由 Scheduler、数据库任务队列和多个 Worker 将积加开放平台数据同步到 PolarDB MySQL。
 
 ## 项目定位与阶段
 
@@ -92,6 +92,9 @@ jijia-polardb-sync/
 | `MAIL_PROVIDER`、`SMTP_*` | 邮件适配器与生产 SMTP 参数；生产不能使用 console/fake |
 | `CREDENTIAL_ENCRYPTION_KEY` | 积加账号凭证加密密钥，必须独立生成、保管和轮换 |
 | `WORKER_POLL_SECONDS`、`WORKER_HEARTBEAT_SECONDS`、`WORKER_STALE_MINUTES` | Worker 轮询、心跳与失联判定参数 |
+| `WORKER_PROCESSES`、`SYNC_LOCK_SCOPE` | Worker 进程总数与同步互斥范围；多账号并发使用 `4` 和 `account` |
+| `JIJIA_RATE_LIMIT_UTILIZATION` | 官方单接口限额的使用率，默认保留 10% 余量 |
+| `JIJIA_TOKEN_RATE_LIMIT_REQUESTS`、`JIJIA_TOKEN_RATE_LIMIT_PERIOD_SECONDS` | 官方 accessToken 接口限额，当前为每秒 10 次 |
 
 `.env.example` 是主要运行变量的示例清单。legacy CLI、Web API 和 Worker 共用最小权限
 运行 `.env`；受控迁移只读取独立的 `.env.migration`，不能把迁移高权限凭据配置给
@@ -116,16 +119,18 @@ mysql -h <POLARDB_HOST> -P 3306 -u <DB_USER> -p <DB_NAME> < sql/init_tables.sql
 
 其中 `raw_api_data.raw_json` 使用 MySQL `JSON` 类型，用来保存原始 API 返回。
 
-已有数据库升级时，由部署负责人先执行
-`sql/migrations/0004_api_config_runtime.sql`，再执行
+已有数据库升级时，由部署负责人按下文顺序执行同步域增量 SQL（包含
+`sql/migrations/0008_api_rate_limit_state.sql`），再执行
 `python -m alembic -c backend/alembic.ini upgrade head`。前者只扩展同步核心的
-`api_config`，后者只增加 Web 任务的配置快照字段；应用不会自动执行生产迁移。
+表结构，后者只管理 Web 身份域和已确认的 Web 增量表；应用不会自动执行生产迁移。
 
 ## API 配置
 
 `api_config` 数据库表是 Web、调度器、Worker 和 legacy CLI 的唯一运行时接口配置源。
 `config/api_config.example.yaml` 只用于开发、评审和受控发布；
 `config/jijia_api_catalog.generated.json` 保存官方文档证据。运行时不会在数据库读取失败时回退到 YAML。
+发布时会校验每个已收录接口的 `rate_limit` 与官方目录一致；多个本地 `api_code`
+只要指向同一 HTTP 方法和路径，就共享 `api_rate_limit_state` 中的同一限流时间线。
 
 登录 Web 后打开 `/api-catalog` 的“接口中心”，可以查看：
 
@@ -555,14 +560,16 @@ M3 既有同步表升级前，只能对已经获准只读扫描的隔离 MySQL/P
 4. `0005_raw_query_indexes.sql`
 5. `0006_sale_return_created_index.sql`
 6. `0007_raw_api_data_stat.sql`
+7. `0008_api_rate_limit_state.sql`
 
 两个 `0004` 分属不同能力，不能只按编号排序或漏执行。`0003`、`0007` 使用仓库受控入口；
-`0004` 至 `0006` 当前由部署负责人按上述顺序人工执行，不进入服务自动启动流程。
+`0004` 至 `0006` 以及 `0008` 当前由部署负责人按上述顺序人工执行，不进入服务自动启动流程。
 
 Web API 提供两个公开健康检查：`GET /health/live` 只证明进程存活；
 `GET /health/ready` 在生产会检查运行数据库可连接且实例未处于全局只读状态，数据库
 不可用或只读时返回脱敏 503，供 ECS/Nginx 决定是否导流。该只读查询不证明运行账号
-拥有 DML 权限，真实权限仍须在隔离副本和 ECS 发布演练中验证。M3 Worker 已使用数据库队列和单执行器实现；
+拥有 DML 权限，真实权限仍须在隔离副本和 ECS 发布演练中验证。M3 Worker 已使用数据库队列、
+`SKIP LOCKED` 多执行器领取和数据库共享的单接口限流实现；
 密码重置已实现，Redis、Celery 和第三方登录继续不属于当前 MVP。
 
 任务详情中的批次号可直接进入对应运行详情和日志。原始数据列表支持按
@@ -577,14 +584,16 @@ Web 第一版直接使用 ECS 上的 systemd、Nginx 和静态前端产物，不
 
 - `config/ecs/jijia-api.service.example`：FastAPI，仅监听 `127.0.0.1:8000`。
 - `config/ecs/jijia-scheduler.service.example`：唯一 Scheduler，使用 `flock` 防止重复实例。
-- `config/ecs/jijia-worker@.service.example`：Worker 模板；当前只启用 `jijia-worker@worker-1`。
+- `config/ecs/jijia-worker@.service.example`：单 Worker 模板；生产启用 `worker-1` 至 `worker-4` 四个实例。
 - `config/ecs/nginx.conf.example`：TLS、SPA 静态资源、API/健康检查代理和登录限流。
 
 生产运行凭据放在仅服务用户可读的 `.env`；迁移高权限凭据单独放在 `.env.migration`，
 只能由获批迁移命令读取，不能配置到 API、Scheduler 或 Worker 的 `EnvironmentFile`。两个文件都不得提交。
 三个 systemd 模板替换占位符后，分别安装为 `/etc/systemd/system/jijia-api.service`、
 `/etc/systemd/system/jijia-scheduler.service` 和
-`/etc/systemd/system/jijia-worker@.service`；Worker 模板中的 `__WORKER_PROCESSES__` 当前固定替换为 `1`。
+`/etc/systemd/system/jijia-worker@.service`；Worker 模板中的 `__WORKER_PROCESSES__` 替换为 `4`，
+该值声明全部 Worker 实例数并参与连接预算校验，不会让单个 unit 自行派生子进程。
+运行 `.env` 同时设置 `SYNC_LOCK_SCOPE=account`、`DB_POOL_SIZE=3`、`DB_MAX_OVERFLOW=2`。
 
 发布负责人在 ECS 上替换模板中的双下划线占位符后，按以下最短链路验证：
 
@@ -607,14 +616,28 @@ sudo nginx -t
 sudo systemctl daemon-reload
 sudo systemctl enable jijia-api jijia-scheduler jijia-worker@worker-1 nginx
 
-# 先确认 API 与数据库就绪，再启动任务生成器和唯一 Worker，最后对外提供服务。
+# 第一阶段：先确认 API 与数据库就绪，再启动任务生成器和 worker-1，最后对外提供服务。
 sudo systemctl start jijia-api
 curl --fail http://127.0.0.1:8000/health/ready
 sudo systemctl start jijia-scheduler jijia-worker@worker-1
-curl --fail http://127.0.0.1:8000/health/worker
+curl --fail --silent http://127.0.0.1:8000/health/worker | ./.venv/bin/python -c \
+  'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 1), data'
 sudo systemctl reload-or-restart nginx
 
-systemctl is-active jijia-api jijia-scheduler jijia-worker@worker-1 nginx
+# 第二阶段：worker-1 验收通过后扩至两个 Worker。
+sudo systemctl start jijia-worker@worker-2
+curl --fail --silent http://127.0.0.1:8000/health/worker | ./.venv/bin/python -c \
+  'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 2), data'
+systemctl is-active jijia-api jijia-scheduler jijia-worker@worker-{1..2} nginx
+
+# 第三阶段：两个 Worker 验收通过后扩至四个 Worker。
+sudo systemctl start jijia-worker@worker-{3..4}
+curl --fail --silent http://127.0.0.1:8000/health/worker | ./.venv/bin/python -c \
+  'import json, sys; data = json.load(sys.stdin)["data"]; assert (data["configuredWorkerCount"], data["onlineWorkerCount"]) == (4, 4), data'
+systemctl is-active jijia-api jijia-scheduler jijia-worker@worker-{1..4} nginx
+
+# 四个 Worker 验收通过后，才允许把 worker-2 至 worker-4 设为开机自启。
+sudo systemctl enable jijia-worker@worker-{2..4}
 curl --fail https://sync.example.com/health/ready
 curl --fail https://sync.example.com/health/worker
 ```
@@ -622,19 +645,26 @@ curl --fail https://sync.example.com/health/worker
 `release_preflight` 通过只代表当前生产配置、YAML、数据库中的已发布接口和运行数据库目标符合启动条件；
 API 范围还要求前端产物完整。它不代表批准迁移或部署。
 `0003` 仍必须先在隔离副本完成演练，并由部署负责人单独授权。
-当前只运行一个 `jijia-worker@worker-1`，不得额外启用其他 Worker 实例。
+默认运行 `jijia-worker@worker-1` 至 `jijia-worker@worker-4` 四个独立 systemd 实例。
+同账号仍由账号锁串行；不同账号可并发。所有账号、进程和服务对相同接口共享数据库限流器，
+HTTP 401 重试和 429 冷却也进入同一时间线。扩容前必须按
+`(API 进程数 + Scheduler 进程数 + Worker 子进程数) × (DB_POOL_SIZE + DB_MAX_OVERFLOW)`
+核对数据库连接预算，并严格按 1→2→4 扩容。每一阶段必须同时满足健康计数准确、队列能够回落，
+且 journald 没有新增 429、数据库连接异常或任务所有权异常，才允许进入下一阶段；失败时停止本阶段新增 Worker，
+回到上一稳定档位。
 服务日志统一进入 journald：
 
 ```bash
-journalctl -u jijia-api -u jijia-scheduler -u jijia-worker@worker-1 --since "2 hours ago"
+journalctl -u jijia-api -u jijia-scheduler -u 'jijia-worker@worker-*' --since "2 hours ago"
 ```
 
 应用或 unit 回滚时先停止领取和生成新任务，恢复上一版本应用、前端产物、运行 `.env` 和 unit 文件后，
 按同一顺序重新验证；本流程不执行 Alembic downgrade，也不替代已批准的数据库恢复方案：
 
 ```bash
-sudo systemctl stop jijia-worker@worker-1 jijia-scheduler jijia-api
+sudo systemctl stop jijia-worker@worker-{1..4} jijia-scheduler jijia-api
 # 恢复上一版本应用、frontend/dist、运行 .env 和三个 systemd unit。
+sudo systemctl disable jijia-worker@worker-{2..4}
 sudo systemctl daemon-reload
 sudo systemctl start jijia-api
 curl --fail http://127.0.0.1:8000/health/ready

@@ -33,7 +33,7 @@ class ListingAnalyzeMultiIndexPageConfigTest(unittest.TestCase):
         self.assertEqual(window["days"], 1)
         self.assertEqual(window["lag_days"], 1)
 
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 6)
+        self.assertEqual(api["rate_limit"], {"max_requests": 1, "period_seconds": 5})
         self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
         self.assertEqual(
             api["params"],

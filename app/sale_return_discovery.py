@@ -1,19 +1,14 @@
-import time
+from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 
-import requests
-
 
 def discover_earliest_date(
-    url: str,
+    request_page: Callable[[dict[str, Any]], dict[str, Any]],
     start_date: date,
     end_date: date,
-    access_token: str,
-    timeout_seconds: int,
     *,
     window_days: int = 31,
-    sleep_seconds: float = 0.2,
 ) -> dict[str, Any]:
     """只读扫描日期总量，并定位账号可返回的最早业务日期。"""
     if end_date < start_date:
@@ -26,21 +21,16 @@ def discover_earliest_date(
 
     def probe_total(window_start: date, window_end: date) -> int:
         nonlocal request_count
-        if request_count:
-            time.sleep(sleep_seconds)
-        response = requests.post(
-            url,
-            json={
+        payload = request_page(
+            {
                 "returnStartDate": window_start.isoformat(),
                 "returnEndDate": window_end.isoformat(),
                 "page": 1,
                 "pagesize": 1,
-            },
-            headers={"accessToken": access_token},
-            timeout=timeout_seconds,
+            }
         )
         request_count += 1
-        return _response_total(response)
+        return _payload_total(payload)
 
     cursor = start_date
     while cursor <= end_date:
@@ -81,14 +71,8 @@ def discover_earliest_date(
     }
 
 
-def _response_total(response: requests.Response) -> int:
+def _payload_total(payload: dict[str, Any]) -> int:
     """只解析业务状态和 total，不保留或返回退货单明细。"""
-    try:
-        payload = response.json()
-    except requests.JSONDecodeError as error:
-        raise ValueError("历史起点扫描响应不是有效 JSON") from error
-    if not response.ok or not isinstance(payload, dict):
-        raise ValueError("历史起点扫描请求失败")
     if payload.get("code") not in (0, 200):
         raise ValueError("历史起点扫描请求失败")
     data = payload.get("data")

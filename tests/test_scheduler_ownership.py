@@ -1,6 +1,7 @@
 import unittest
 from argparse import Namespace
 from contextlib import nullcontext
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import app.main as main_module
@@ -80,7 +81,7 @@ class SchedulerOwnershipTest(unittest.TestCase):
             self.assertLogs("app.main", level="ERROR") as logs,
             self.assertRaises(SystemExit) as raised,
         ):
-            main_module._sync_enabled(object())
+            main_module._sync_enabled(SimpleNamespace(jijia_rate_limit_utilization=0.9))
 
         self.assertEqual(raised.exception.code, 2)
         create_engine.assert_called_once()
@@ -111,7 +112,7 @@ class SchedulerOwnershipTest(unittest.TestCase):
             patch.object(main_module, "JijiaApiClient", return_value=object()),
             patch.object(main_module, "SyncEngine", return_value=sync_engine),
         ):
-            main_module._sync_enabled(object())
+            main_module._sync_enabled(SimpleNamespace(jijia_rate_limit_utilization=0.9))
 
         sync_engine.sync_enabled_apis.assert_called_once()
 
@@ -144,7 +145,7 @@ class SchedulerOwnershipTest(unittest.TestCase):
             patch.object(main_module, "SyncEngine", return_value=sync_engine),
         ):
             main_module._run_single_api(
-                object(),
+                SimpleNamespace(jijia_rate_limit_utilization=0.9),
                 "amazon_shop_page",
                 "sync api",
             )
@@ -187,7 +188,7 @@ class SchedulerOwnershipTest(unittest.TestCase):
             patch.object(main_module, "SyncEngine", return_value=sync_engine),
         ):
             main_module._probe_single_api(
-                object(),
+                SimpleNamespace(jijia_rate_limit_utilization=0.9),
                 "sale_return_order_page",
             )
 

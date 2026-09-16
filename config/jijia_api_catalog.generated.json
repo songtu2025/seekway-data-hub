@@ -187,7 +187,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 3,
@@ -210,7 +215,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 53,
@@ -229,7 +239,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 54,
@@ -251,7 +266,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 59,
@@ -276,7 +296,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 211,
@@ -299,7 +324,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 935,
@@ -326,7 +356,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 936,
@@ -353,7 +388,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1019,
@@ -378,7 +418,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1752,
@@ -400,7 +445,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1753,
@@ -427,7 +477,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1921,
@@ -446,7 +501,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1956,
@@ -468,7 +528,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2898,
@@ -490,7 +555,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 4835,
@@ -512,7 +582,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 5067,
@@ -537,7 +612,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 5070,
@@ -560,7 +640,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_no_param_source",
-      "execution_reason": "产品相关已入库 raw 未发现语义明确的 attributeName 或属性项字段来源，禁止猜测参数、使用示例值或请求真实接口。"
+      "execution_reason": "产品相关已入库 raw 未发现语义明确的 attributeName 或属性项字段来源，禁止猜测参数、使用示例值或请求真实接口。",
+      "rate_limit": {
+        "max_requests": 3,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 5071,
@@ -583,7 +668,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 63,
@@ -605,7 +695,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 64,
@@ -627,7 +722,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 141,
@@ -649,7 +749,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 212,
@@ -671,7 +776,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1035,
@@ -696,7 +806,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_sensitive_credentials",
-      "execution_reason": "公开文档响应结构包含服务商凭证字段，禁止作为业务 raw 数据同步。"
+      "execution_reason": "公开文档响应结构包含服务商凭证字段，禁止作为业务 raw 数据同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1449,
@@ -721,7 +836,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_no_param_source",
-      "execution_reason": "必填 rnType 未找到可映射到公开枚举的真实上游字段，禁止猜测参数或请求真实接口。"
+      "execution_reason": "必填 rnType 未找到可映射到公开枚举的真实上游字段，禁止猜测参数或请求真实接口。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 25,
@@ -740,7 +860,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 61,
@@ -767,7 +892,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 66,
@@ -786,7 +916,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 139,
@@ -808,7 +943,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 153,
@@ -831,7 +971,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 596,
@@ -856,7 +1001,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "framework_auth_only",
-      "execution_reason": "获取 accessToken 已由鉴权模块处理，不属于业务 raw 备份接口。"
+      "execution_reason": "获取 accessToken 已由鉴权模块处理，不属于业务 raw 备份接口。",
+      "rate_limit": {
+        "max_requests": 10,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 694,
@@ -879,7 +1029,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1177,
@@ -902,7 +1057,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_runtime_rejected",
-      "execution_reason": "使用已证明的上游站点 ID 单元素数组调用，真实请求返回 HTTP 400；保留失败批次证据，在有新官方证据前不重试。"
+      "execution_reason": "使用已证明的上游站点 ID 单元素数组调用，真实请求返回 HTTP 400；保留失败批次证据，在有新官方证据前不重试。",
+      "rate_limit": {
+        "max_requests": 10,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1179,
@@ -925,7 +1085,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_runtime_rejected",
-      "execution_reason": "使用已证明的上游站点 ID 单元素数组调用，真实请求返回 HTTP 400；保留失败批次证据，在有新官方证据前不重试。"
+      "execution_reason": "使用已证明的上游站点 ID 单元素数组调用，真实请求返回 HTTP 400；保留失败批次证据，在有新官方证据前不重试。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2537,
@@ -944,7 +1109,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2538,
@@ -963,7 +1133,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2885,
@@ -982,7 +1157,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 3095,
@@ -1001,7 +1181,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_sensitive_credentials",
-      "execution_reason": "公开文档响应包含凭证字段，禁止作为业务 raw 数据同步。"
+      "execution_reason": "公开文档响应包含凭证字段，禁止作为业务 raw 数据同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 4563,
@@ -1020,7 +1205,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 4943,
@@ -1039,7 +1229,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 5066,
@@ -1062,7 +1257,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 67,
@@ -1081,7 +1281,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 137,
@@ -1106,7 +1311,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 138,
@@ -1131,7 +1341,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1377,
@@ -1153,7 +1368,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 5592,
@@ -1172,7 +1392,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 6013,
@@ -1198,7 +1423,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 116,
@@ -1220,7 +1450,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 136,
@@ -1239,7 +1474,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1014,
@@ -1261,7 +1501,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1092,
@@ -1283,7 +1528,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 98,
@@ -1312,7 +1562,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 99,
@@ -1341,7 +1596,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 100,
@@ -1370,7 +1630,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 101,
@@ -1395,7 +1660,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 102,
@@ -1417,7 +1687,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 104,
@@ -1442,7 +1717,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 287,
@@ -1467,7 +1747,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 288,
@@ -1492,7 +1777,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 291,
@@ -1517,7 +1807,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 292,
@@ -1542,7 +1837,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 293,
@@ -1567,7 +1867,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 295,
@@ -1592,7 +1897,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 575,
@@ -1617,7 +1927,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 576,
@@ -1642,7 +1957,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 656,
@@ -1667,7 +1987,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 657,
@@ -1692,7 +2017,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 658,
@@ -1717,7 +2047,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1375,
@@ -1742,7 +2077,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2450,
@@ -1767,7 +2107,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2451,
@@ -1792,7 +2137,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2452,
@@ -1817,7 +2167,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2897,
@@ -1842,7 +2197,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 3106,
@@ -1867,7 +2227,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 7410,
@@ -1890,7 +2255,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 7412,
@@ -1915,7 +2285,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 15,
@@ -1937,7 +2312,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 18,
@@ -1964,7 +2344,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 19,
@@ -1991,7 +2376,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 84,
@@ -2016,7 +2406,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 172,
@@ -2038,7 +2433,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 234,
@@ -2060,7 +2460,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 235,
@@ -2083,7 +2488,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1020,
@@ -2105,7 +2515,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1021,
@@ -2128,7 +2543,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1022,
@@ -2150,7 +2570,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_runtime_rejected",
-      "execution_reason": "历史真实请求在已文档化的日窗口参数下返回 400/50099；未获得新官方证据前禁止重复探测。"
+      "execution_reason": "历史真实请求在已文档化的日窗口参数下返回 400/50099；未获得新官方证据前禁止重复探测。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1557,
@@ -2177,7 +2602,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1559,
@@ -2204,7 +2634,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 5136,
@@ -2226,7 +2661,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 5654,
@@ -2245,7 +2685,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 20,
@@ -2267,7 +2712,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 21,
@@ -2289,7 +2739,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 232,
@@ -2311,7 +2766,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 773,
@@ -2336,7 +2796,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1036,
@@ -2358,7 +2823,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1436,
@@ -2383,7 +2853,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2542,
@@ -2405,7 +2880,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2658,
@@ -2430,7 +2910,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 256,
@@ -2452,7 +2937,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 709,
@@ -2474,7 +2964,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1027,
@@ -2496,7 +2991,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1028,
@@ -2515,7 +3015,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1029,
@@ -2538,7 +3043,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1030,
@@ -2561,7 +3071,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1032,
@@ -2584,7 +3099,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1033,
@@ -2606,7 +3126,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1034,
@@ -2628,7 +3153,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1778,
@@ -2647,7 +3177,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1779,
@@ -2669,7 +3204,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2453,
@@ -2694,7 +3234,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2539,
@@ -2717,7 +3262,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 3,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2732,
@@ -2736,7 +3286,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 3004,
@@ -2755,7 +3310,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 3059,
@@ -2777,7 +3337,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 4624,
@@ -2800,7 +3365,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 5516,
@@ -2819,7 +3389,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 7610,
@@ -2841,7 +3416,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 7611,
@@ -2864,7 +3444,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 4443,
@@ -2887,7 +3472,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 122,
@@ -2918,7 +3508,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 123,
@@ -2949,7 +3544,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 128,
@@ -2971,7 +3571,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 2,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 129,
@@ -2998,7 +3603,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 5,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 130,
@@ -3033,7 +3643,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 131,
@@ -3062,7 +3677,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 132,
@@ -3091,7 +3711,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 133,
@@ -3122,7 +3747,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 140,
@@ -3155,7 +3785,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 5,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 309,
@@ -3184,7 +3819,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 2,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1016,
@@ -3211,7 +3851,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1017,
@@ -3242,7 +3887,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1018,
@@ -3271,7 +3921,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2256,
@@ -3302,7 +3957,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 10,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2280,
@@ -3325,7 +3985,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 3,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2284,
@@ -3354,7 +4019,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 3375,
@@ -3385,7 +4055,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 5,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 71,
@@ -3407,7 +4082,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 118,
@@ -3429,7 +4109,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1366,
@@ -3451,7 +4136,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 27,
@@ -3473,7 +4163,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 29,
@@ -3495,7 +4190,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 30,
@@ -3517,7 +4217,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 31,
@@ -3539,7 +4244,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 111,
@@ -3561,7 +4271,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 112,
@@ -3583,7 +4298,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 113,
@@ -3610,7 +4330,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 301,
@@ -3635,7 +4360,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 600,
@@ -3657,7 +4387,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1038,
@@ -3682,7 +4417,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1039,
@@ -3707,7 +4447,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1040,
@@ -3738,7 +4483,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2388,
@@ -3760,7 +4510,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 3,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 43,
@@ -3782,7 +4537,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 86,
@@ -3805,7 +4565,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 87,
@@ -3827,7 +4592,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 88,
@@ -3846,7 +4616,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_no_param_source",
-      "execution_reason": "接口要求采购计划 id 或 code；采购计划列表无 raw，采购订单没有计划 ID且计划编号为空，交货单 fid 为采购订单 ID，禁止猜测参数或请求真实接口。"
+      "execution_reason": "接口要求采购计划 id 或 code；采购计划列表无 raw，采购订单没有计划 ID且计划编号为空，交货单 fid 为采购订单 ID，禁止猜测参数或请求真实接口。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 90,
@@ -3869,7 +4644,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_no_param_source",
-      "execution_reason": "必填 code 是采购计划单号；采购订单 raw 的 purchasePlanCode 虽字段存在但均为空，采购计划列表也没有可用 raw，禁止猜测参数或请求真实接口。"
+      "execution_reason": "必填 code 是采购计划单号；采购订单 raw 的 purchasePlanCode 虽字段存在但均为空，采购计划列表也没有可用 raw，禁止猜测参数或请求真实接口。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 91,
@@ -3891,7 +4671,12 @@
       "configured_enabled": false,
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 92,
@@ -3938,7 +4723,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 93,
@@ -3991,7 +4781,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 152,
@@ -4013,7 +4808,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 689,
@@ -4040,7 +4840,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 931,
@@ -4079,7 +4884,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 932,
@@ -4116,7 +4926,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1024,
@@ -4139,7 +4954,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1025,
@@ -4161,7 +4981,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1026,
@@ -4184,7 +5009,12 @@
       "configured_enabled": true,
       "execution_bucket": "configured",
       "execution_stage": "configured_enabled",
-      "execution_reason": "已进入 enabled 批量同步。"
+      "execution_reason": "已进入 enabled 批量同步。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1060,
@@ -4203,7 +5033,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1080,
@@ -4222,7 +5057,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_runtime_rejected",
-      "execution_reason": "使用已证明的真实采购单号按官方单元素字符串数组调用，真实请求返回 HTTP 400；保留失败批次证据，在有新官方证据前不重试或猜测其他编码。"
+      "execution_reason": "使用已证明的真实采购单号按官方单元素字符串数组调用，真实请求返回 HTTP 400；保留失败批次证据，在有新官方证据前不重试或猜测其他编码。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1082,
@@ -4245,7 +5085,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1434,
@@ -4280,7 +5125,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1593,
@@ -4307,7 +5157,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2611,
@@ -4330,7 +5185,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 3100,
@@ -4349,7 +5209,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 5262,
@@ -4368,7 +5233,12 @@
       "configured_enabled": false,
       "execution_bucket": "terminal_deferred",
       "execution_stage": "defer_sensitive_credentials",
-      "execution_reason": "公开文档响应包含联系人、邮箱、电话、税号、地址、银行账户和公章图片链接等高敏感字段，禁止作为业务 raw 数据同步。"
+      "execution_reason": "公开文档响应包含联系人、邮箱、电话、税号、地址、银行账户和公章图片链接等高敏感字段，禁止作为业务 raw 数据同步。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 8,
@@ -4393,7 +5263,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 9,
@@ -4435,7 +5310,12 @@
       ],
       "execution_bucket": "configured",
       "execution_stage": "configured_disabled",
-      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。"
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 10,
@@ -4458,7 +5338,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 16,
@@ -4483,7 +5368,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 17,
@@ -4505,7 +5395,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 69,
@@ -4527,7 +5422,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 70,
@@ -4549,7 +5449,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 96,
@@ -4574,7 +5479,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 119,
@@ -4597,7 +5507,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 120,
@@ -4619,7 +5534,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1011,
@@ -4648,7 +5568,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_upstream_params",
       "execution_stage": "needs_param_source",
-      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。"
+      "execution_reason": "公开文档显示存在业务必填参数，需先证明真实上游参数来源。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 1382,
@@ -4670,7 +5595,12 @@
       "configured_enabled": false,
       "execution_bucket": "needs_sensitive_review",
       "execution_stage": "needs_sensitive_review",
-      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。"
+      "execution_reason": "公开文档响应或接口域可能包含敏感信息，需先做字段审查和脱敏边界确认。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2033,
@@ -4699,7 +5629,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "defer_write_or_mutation",
-      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。"
+      "execution_reason": "写入或确认类接口不属于当前只读备份同步范围，默认暂缓。",
+      "rate_limit": {
+        "max_requests": 2,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 2541,
@@ -4721,7 +5656,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 5,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     },
     {
       "doc_id": 3003,
@@ -4743,7 +5683,12 @@
       "configured_enabled": false,
       "execution_bucket": "defer_or_review",
       "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。"
+      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "rate_limit": {
+        "max_requests": 1,
+        "period_seconds": 1,
+        "dimension": "接口维度"
+      }
     }
   ],
   "errors": []

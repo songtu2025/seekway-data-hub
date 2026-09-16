@@ -1,5 +1,6 @@
 import unittest
 from contextlib import nullcontext
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -25,7 +26,11 @@ class MainErrorLoggingTest(unittest.TestCase):
             self.assertLogs("app.main", level="ERROR") as logs,
             self.assertRaises(SystemExit) as raised,
         ):
-            main_module._run_single_api(object(), "inventory_adjustments_page", "sync api")
+            main_module._run_single_api(
+                SimpleNamespace(jijia_rate_limit_utilization=0.9),
+                "inventory_adjustments_page",
+                "sync api",
+            )
 
         self.assertEqual(raised.exception.code, 1)
         message = "\n".join(logs.output)
@@ -51,7 +56,7 @@ class MainErrorLoggingTest(unittest.TestCase):
             self.assertLogs("app.main", level="ERROR") as logs,
             self.assertRaises(SystemExit) as raised,
         ):
-            main_module._sync_enabled(object())
+            main_module._sync_enabled(SimpleNamespace(jijia_rate_limit_utilization=0.9))
 
         self.assertEqual(raised.exception.code, 1)
         message = "\n".join(logs.output)
@@ -66,11 +71,14 @@ class MainErrorLoggingTest(unittest.TestCase):
         auth_client.get_access_token.side_effect = ValueError(secret)
 
         with (
+            patch.object(main_module, "create_db_engine", return_value=object()),
             patch.object(main_module, "JijiaAuthClient", return_value=auth_client),
             self.assertLogs("app.main", level="ERROR") as logs,
             self.assertRaises(SystemExit) as raised,
         ):
-            main_module._test_token(object())
+            main_module._test_token(
+                SimpleNamespace(jijia_rate_limit_utilization=0.9)
+            )
 
         self.assertEqual(raised.exception.code, 1)
         message = "\n".join(logs.output)

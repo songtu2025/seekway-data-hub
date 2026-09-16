@@ -301,9 +301,15 @@ apis:
   - api_code: first_api
     path: /shared
     enabled: true
+    rate_limit:
+      max_requests: 2
+      period_seconds: 1
   - api_code: second_api
     path: /shared
     enabled: false
+    rate_limit:
+      max_requests: 2
+      period_seconds: 1
 """
         )
 
@@ -311,6 +317,26 @@ apis:
             [api["api_code"] for api in apis],
             ["first_api", "second_api"],
         )
+
+    def test_shared_path_rejects_conflicting_rate_limits(self):
+        with self.assertRaisesRegex(ValueError, "must use one rate limit"):
+            self._load_yaml(
+                """
+apis:
+  - api_code: first_api
+    path: /shared
+    enabled: true
+    rate_limit:
+      max_requests: 2
+      period_seconds: 1
+  - api_code: second_api
+    path: /shared
+    enabled: false
+    rate_limit:
+      max_requests: 1
+      period_seconds: 1
+"""
+            )
 
     def test_enabled_apis_accepts_only_explicit_true(self):
         engine = SyncEngine(

@@ -65,7 +65,7 @@ class FileFileUrlQueryConfigTest(unittest.TestCase):
         )
         self.assertEqual(api["date_field"], "")
         self.assertTrue(api["sensitive_response"])
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 0.6)
+        self.assertEqual(api["rate_limit"], {"max_requests": 2, "period_seconds": 1})
         self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
         self.assertEqual(api["params"], {})
         self.assertEqual(

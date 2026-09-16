@@ -43,7 +43,7 @@ def test_frontend_build_uses_pinned_node_contract_and_clean_install() -> None:
     assert "npm ci" in setup_script
 
 
-def test_ecs_services_use_scoped_preflight_and_single_worker_contract() -> None:
+def test_ecs_services_use_scoped_preflight_and_worker_template_contract() -> None:
     service_scopes = {
         "jijia-api.service.example": "api",
         "jijia-scheduler.service.example": "scheduler",
@@ -60,7 +60,7 @@ def test_ecs_services_use_scoped_preflight_and_single_worker_contract() -> None:
     assert "Environment=WORKER_NAME=%i" in worker
 
 
-def test_ecs_readme_uses_complete_single_worker_service_commands() -> None:
+def test_ecs_readme_uses_one_two_four_worker_canary_and_single_worker_rollback() -> None:
     readme = README.read_text("utf-8")
 
     assert "jijia-worker.service.example" not in readme
@@ -69,16 +69,45 @@ def test_ecs_readme_uses_complete_single_worker_service_commands() -> None:
         "jijia-scheduler.service",
         "jijia-worker@.service",
         "jijia-worker@worker-1",
+        "jijia-worker@worker-{1..4}",
+        "jijia-worker@worker-{2..4}",
         "--service api",
         "--service scheduler",
         "--service worker",
         "/health/ready",
         "/health/worker",
-        "journalctl -u jijia-api -u jijia-scheduler -u jijia-worker@worker-1",
+        "journalctl -u jijia-api -u jijia-scheduler -u 'jijia-worker@worker-*'",
+        "sudo systemctl enable jijia-api jijia-scheduler jijia-worker@worker-1 nginx",
         "sudo systemctl start jijia-scheduler jijia-worker@worker-1",
-        "sudo systemctl stop jijia-worker@worker-1 jijia-scheduler jijia-api",
+        "sudo systemctl start jijia-worker@worker-2",
+        "sudo systemctl start jijia-worker@worker-{3..4}",
+        "sudo systemctl enable jijia-worker@worker-{2..4}",
+        "== (4, 1), data",
+        "== (4, 2), data",
+        "== (4, 4), data",
+        "sudo systemctl stop jijia-worker@worker-{1..4} jijia-scheduler jijia-api",
         "sudo systemctl reload-or-restart nginx",
     ):
         assert expected in readme
+    assert (
+        "sudo systemctl enable jijia-api jijia-scheduler jijia-worker@worker-{1..4}" not in readme
+    )
+    assert "sudo systemctl start jijia-scheduler jijia-worker@worker-{1..4}" not in readme
+    canary_steps = (
+        "sudo systemctl enable jijia-api jijia-scheduler jijia-worker@worker-1 nginx",
+        "sudo systemctl start jijia-scheduler jijia-worker@worker-1",
+        "== (4, 1), data",
+        "sudo systemctl start jijia-worker@worker-2",
+        "== (4, 2), data",
+        "sudo systemctl start jijia-worker@worker-{3..4}",
+        "== (4, 4), data",
+        "sudo systemctl enable jijia-worker@worker-{2..4}",
+    )
+    assert [readme.index(step) for step in canary_steps] == sorted(
+        readme.index(step) for step in canary_steps
+    )
+    assert readme.count('data["configuredWorkerCount"]') == 3
+    assert readme.count('data["onlineWorkerCount"]') == 3
     assert readme.count("curl --fail http://127.0.0.1:8000/health/ready") == 2
-    assert readme.count("curl --fail http://127.0.0.1:8000/health/worker") == 2
+    assert readme.count("curl --fail --silent http://127.0.0.1:8000/health/worker") == 3
+    assert readme.count("curl --fail http://127.0.0.1:8000/health/worker") == 1

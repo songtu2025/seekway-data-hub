@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 from urllib.parse import urljoin
 
 import requests
+from requests import HTTPError
 
+from app.api_rate_limiter import (
+    RateLimitPolicy,
+    RequestRateLimiter,
+    retry_after_seconds,
+)
 from app.config import AppSettings
 
 
@@ -38,6 +44,7 @@ class JijiaAuthClient:
         timeout_seconds: int = 30,
         credentials: JijiaCredentials | None = None,
         use_token_cache: bool = True,
+        rate_limiter: RequestRateLimiter | None = None,
     ):
         """保存认证所需配置和 HTTP 超时时间。"""
         self.settings = settings
@@ -45,6 +52,7 @@ class JijiaAuthClient:
         self.credentials = credentials
         # Web 账号凭据不得与旧 CLI 共享磁盘 Token，显式凭据始终禁用缓存。
         self.use_token_cache = use_token_cache and credentials is None
+        self.rate_limiter = rate_limiter
 
     def get_access_token(self, force_refresh: bool = False) -> AccessToken:
         """获取积加开放平台 accessToken。
@@ -61,8 +69,28 @@ class JijiaAuthClient:
             return cached_token
 
         url = self._open_api_url(self.settings.jijia_token_url)
+        policy: RateLimitPolicy | None = None
+        if self.rate_limiter is not None:
+            policy = RateLimitPolicy(
+                max_requests=self.settings.jijia_token_rate_limit_requests,
+                period_seconds=self.settings.jijia_token_rate_limit_period_seconds,
+            )
+            self.rate_limiter.acquire("POST", self.settings.jijia_token_url, policy)
         response = requests.post(url, json=self._token_payload(), timeout=self.timeout_seconds)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except HTTPError:
+            if response.status_code == 429 and self.rate_limiter is not None:
+                assert policy is not None
+                self.rate_limiter.defer(
+                    "POST",
+                    self.settings.jijia_token_url,
+                    retry_after_seconds(
+                        response.headers.get("Retry-After"),
+                        policy.period_seconds,
+                    ),
+                )
+            raise
 
         payload = response.json()
         code = payload.get("code")

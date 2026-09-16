@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from app.api_rate_limiter import rate_limit_policy
+
 REGISTRY_METADATA_KEY = "_registry"
 
 
@@ -63,6 +65,23 @@ def publication_records(
             and classification != "write_or_mutation"
             and execution_stage != "defer_write_or_mutation"
         )
+        if official is not None:
+            official_rate = official.get("rate_limit")
+            if not isinstance(official_rate, dict):
+                raise ValueError(f"Official rate limit is missing: {api_config['api_code']}")
+            if official_rate.get("dimension") != "接口维度":
+                raise ValueError(
+                    f"Official rate limit is not endpoint-scoped: {api_config['api_code']}"
+                )
+            configured_policy = rate_limit_policy(api_config)
+            if configured_policy.max_requests != official_rate.get(
+                "max_requests"
+            ) or configured_policy.period_seconds != float(
+                official_rate.get("period_seconds") or 0
+            ):
+                raise ValueError(
+                    f"API rate limit does not match official catalog: {api_config['api_code']}"
+                )
         platform_enabled = bool(api_config.get("platform_enabled", read_only_verified))
         if api_config["enabled"] is True and not read_only_verified:
             raise ValueError(

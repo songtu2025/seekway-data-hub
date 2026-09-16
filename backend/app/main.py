@@ -143,11 +143,20 @@ def _health_worker(
     settings: Annotated[WebSettings, Depends(get_web_settings)],
 ) -> dict[str, object]:
     """独立报告 Worker 健康，不影响 API 和数据库就绪状态。"""
-    availability = worker_runtime_data(db, settings)["availability"]
+    runtime = worker_runtime_data(db, settings)
+    availability = runtime["availability"]
     if availability == "offline":
         raise ApiError(503, "WORKER_NOT_READY", "任务执行服务暂未就绪")
+    status = "degraded" if runtime["capacityStatus"] == "degraded" else availability
     return {
-        "data": {"status": availability},
+        "data": {
+            "status": status,
+            "configuredWorkerCount": runtime["configuredWorkerCount"],
+            "onlineWorkerCount": runtime["onlineWorkerCount"],
+            "busyWorkerCount": runtime["busyWorkerCount"],
+            "idleWorkerCount": runtime["idleWorkerCount"],
+            "staleWorkerCount": runtime["staleWorkerCount"],
+        },
         "requestId": request.state.request_id,
     }
 

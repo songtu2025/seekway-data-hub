@@ -4,6 +4,7 @@ from sqlalchemy import Table, UniqueConstraint, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api_rate_limiter import api_rate_limit_state_table
 from backend.app.models.sync_records import (
     api_config_table,
     raw_api_data_stat_table,
@@ -64,6 +65,10 @@ RAW_DATA_STAT_REQUIRED_COLUMNS = frozenset(raw_api_data_stat_table.c.keys())
 RAW_DATA_STAT_REQUIRED_INDEX_SPECS = _model_index_specs(raw_api_data_stat_table)
 RAW_DATA_STAT_REQUIRED_INDEXES = _index_names(RAW_DATA_STAT_REQUIRED_INDEX_SPECS)
 
+API_RATE_LIMIT_REQUIRED_COLUMNS = frozenset(api_rate_limit_state_table.c.keys())
+API_RATE_LIMIT_REQUIRED_INDEX_SPECS = _model_index_specs(api_rate_limit_state_table)
+API_RATE_LIMIT_REQUIRED_INDEXES = _index_names(API_RATE_LIMIT_REQUIRED_INDEX_SPECS)
+
 
 def verify_runtime_target(engine: Engine) -> PreflightResult:
     """用只读查询验证实例非只读、Web 迁移 head 和同步核心目标结构。"""
@@ -115,6 +120,11 @@ def verify_runtime_target(engine: Engine) -> PreflightResult:
                     status="blocked",
                     code="RUNTIME_RAW_DATA_STAT_SCHEMA_MISMATCH",
                 )
+            if not _api_rate_limit_ready(connection):
+                return PreflightResult(
+                    status="blocked",
+                    code="RUNTIME_API_RATE_LIMIT_SCHEMA_MISMATCH",
+                )
     except SQLAlchemyError:
         return PreflightResult(
             status="blocked",
@@ -151,6 +161,71 @@ def _raw_data_stat_ready(connection: Any) -> bool:
         raw_api_data_stat_table,
         RAW_DATA_STAT_REQUIRED_INDEX_SPECS,
     )
+
+
+def _api_rate_limit_ready(connection: Any) -> bool:
+    """确认已执行 0008，避免并发请求绕过共享限流。"""
+    return _runtime_table_ready(
+        connection,
+        api_rate_limit_state_table,
+        API_RATE_LIMIT_REQUIRED_INDEX_SPECS,
+    ) and _api_rate_limit_columns_ready(connection)
+
+
+def _api_rate_limit_columns_ready(connection: Any) -> bool:
+    """精确校验共享限流状态列，兼容 MySQL 对默认值大小写的差异。"""
+    rows = {
+        str(row["column_name"]): row
+        for row in connection.execute(
+            text(
+                """
+                SELECT
+                  COLUMN_NAME AS column_name,
+                  DATA_TYPE AS data_type,
+                  IS_NULLABLE AS is_nullable,
+                  CHARACTER_MAXIMUM_LENGTH AS character_maximum_length,
+                  DATETIME_PRECISION AS datetime_precision,
+                  COLUMN_DEFAULT AS column_default,
+                  EXTRA AS extra
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'api_rate_limit_state'
+                """
+            )
+        ).mappings()
+    }
+    rate_limit_key = rows.get("rate_limit_key")
+    if not rate_limit_key or not (
+        str(rate_limit_key["data_type"]).lower() == "varchar"
+        and rate_limit_key["character_maximum_length"] == 600
+        and str(rate_limit_key["is_nullable"]).upper() == "NO"
+    ):
+        return False
+
+    for column_name in ("next_allowed_at", "created_at", "updated_at"):
+        column = rows.get(column_name)
+        if not column or not (
+            str(column["data_type"]).lower() == "datetime"
+            and column["datetime_precision"] == 6
+            and str(column["is_nullable"]).upper() == "NO"
+        ):
+            return False
+
+    expected_default = "current_timestamp(6)"
+    if _normalize_schema_expression(rows["created_at"]["column_default"]) != expected_default:
+        return False
+    if _normalize_schema_expression(rows["updated_at"]["column_default"]) != expected_default:
+        return False
+    return "onupdatecurrent_timestamp(6)" in _normalize_schema_expression(
+        rows["updated_at"]["extra"]
+    )
+
+
+def _normalize_schema_expression(value: Any) -> str:
+    """忽略 information_schema 表达式的大小写与空白差异。"""
+    if value is None:
+        return ""
+    return "".join(str(value).lower().split())
 
 
 def _runtime_table_ready(

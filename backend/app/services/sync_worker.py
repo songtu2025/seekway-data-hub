@@ -19,6 +19,7 @@ from app.api_config_registry import (
     api_config_snapshot,
     load_published_api_config,
 )
+from app.api_rate_limiter import MySqlApiRateLimiter, normalize_rate_limit_key
 from app.auth import JijiaAuthClient, JijiaCredentials
 from app.config import load_settings
 from app.sync_context import (
@@ -962,8 +963,6 @@ class SyncWorker:
         execution: SyncJobExecution,
         plan: _ChainedJobPlan,
     ) -> None:
-        rate_limit = (execution.api_config_snapshot_json or {}).get("rate_limit") or {}
-        delay_seconds = max(float(rate_limit.get("sleep_seconds") or 0), 0.0)
         db.add(
             build_sync_job(
                 SyncJobSpec(
@@ -987,7 +986,7 @@ class SyncWorker:
                     api_config_snapshot_json=execution.api_config_snapshot_json,
                     market_ids=list(execution.market_ids) or None,
                 ),
-                queued_at=utc_now() + timedelta(seconds=delay_seconds),
+                queued_at=utc_now(),
             )
         )
 
@@ -1062,29 +1061,45 @@ class CoreSyncExecutor:
         """持有 CLI/Web 共用互斥锁后执行一次同步窗口。"""
         credentials = self._credentials(job.jijia_account_id)
         app_settings = load_settings()
+        rate_limiter = MySqlApiRateLimiter(
+            self.engine,
+            utilization=app_settings.jijia_rate_limit_utilization,
+        )
+        with Session(self.engine) as db:
+            current_api_config = load_published_api_config(
+                db,
+                job.api_code,
+                require_platform_enabled=True,
+            )
         api_config = job.api_config_snapshot_json
-        if api_config is None:
-            with Session(self.engine) as db:
-                api_config = load_published_api_config(
-                    db,
-                    job.api_code,
-                    require_platform_enabled=True,
-                )
-                if api_config is not None:
-                    api_config = api_config_snapshot(api_config)
+        if api_config is None and current_api_config is not None:
+            api_config = api_config_snapshot(current_api_config)
         if api_config is None:
             raise RuntimeError("同步任务缺少已发布接口配置")
         if str(api_config.get("api_code") or "") != job.api_code:
             raise RuntimeError("同步任务接口配置与 api_code 不一致")
         if job.api_config_hash and api_config_hash(api_config) != job.api_config_hash:
             raise RuntimeError("同步任务接口配置摘要校验失败")
+        if current_api_config is None:
+            raise RuntimeError("同步任务接口当前未启用")
+        frozen_endpoint = normalize_rate_limit_key(
+            str(api_config.get("method") or "POST"),
+            str(api_config.get("path") or ""),
+        )
+        current_endpoint = normalize_rate_limit_key(
+            str(current_api_config.get("method") or "POST"),
+            str(current_api_config.get("path") or ""),
+        )
+        if frozen_endpoint != current_endpoint:
+            raise RuntimeError("同步任务接口地址已变更，请重新创建任务")
+        api_config = deepcopy(api_config)
+        api_config["rate_limit"] = deepcopy(current_api_config["rate_limit"])
         if job.market_ids:
             scope = api_config.get("market_scope") or {}
             request_field = str(scope.get("request_field") or "")
             if not scope.get("enabled") or not request_field:
                 raise RuntimeError("同步任务店铺范围配置无效")
             # 配置摘要校验通过后再复制并注入任务输入，避免改变已发布配置事实。
-            api_config = deepcopy(api_config)
             params = dict(api_config.get("params") or {})
             params[request_field] = list(job.market_ids)
             api_config["params"] = params
@@ -1120,6 +1135,7 @@ class CoreSyncExecutor:
             app_settings,
             credentials=credentials,
             use_token_cache=False,
+            rate_limiter=rate_limiter,
         )
         token = auth_client.get_access_token(force_refresh=True)
         # 旧同步核心仍是独立 app 包，运行时加载可避免 Web 类型检查接管其历史债务。
@@ -1128,6 +1144,7 @@ class CoreSyncExecutor:
         api_client = api_client_class(
             app_settings,
             auth_client=auth_client,
+            rate_limiter=rate_limiter,
         )
 
         def page_progress(current: int, total: int | None) -> None:

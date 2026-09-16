@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api_client import JijiaApiClient
 from app.api_config_registry import load_published_api_configs, publication_records
+from app.api_rate_limiter import MySqlApiRateLimiter
 from app.auth import JijiaAuthClient
 from app.config import (
     WEB_SCHEDULER_ONLY_API_CODES,
@@ -172,7 +173,12 @@ def _test_token(settings) -> None:
     """
     logger = logging.getLogger(__name__)
     try:
-        token = JijiaAuthClient(settings).get_access_token()
+        engine = create_db_engine(settings)
+        rate_limiter = MySqlApiRateLimiter(
+            engine,
+            utilization=settings.jijia_rate_limit_utilization,
+        )
+        token = JijiaAuthClient(settings, rate_limiter=rate_limiter).get_access_token()
     except HTTPError as error:
         status_code = error.response.status_code if error.response is not None else "unknown"
         logger.error("access token request failed: http_status=%s", status_code)
@@ -249,10 +255,19 @@ def _sync_enabled(settings) -> None:
     )
     try:
         with _sync_task_lock(engine):
-            auth_client = JijiaAuthClient(settings)
+            rate_limiter = MySqlApiRateLimiter(
+                engine,
+                utilization=settings.jijia_rate_limit_utilization,
+            )
+            auth_client = JijiaAuthClient(settings, rate_limiter=rate_limiter)
             token = auth_client.get_access_token()
             result = SyncEngine(api_configs, engine).sync_enabled_apis(
-                JijiaApiClient(settings, auth_client=auth_client), token
+                JijiaApiClient(
+                    settings,
+                    auth_client=auth_client,
+                    rate_limiter=rate_limiter,
+                ),
+                token,
             )
     except HTTPError as error:
         status_code = error.response.status_code if error.response is not None else "unknown"
@@ -291,11 +306,19 @@ def _probe_single_api(settings, api_code: str) -> None:
     engine = create_db_engine(settings)
     api_configs = load_published_api_configs(engine)
     try:
-        auth_client = JijiaAuthClient(settings)
+        rate_limiter = MySqlApiRateLimiter(
+            engine,
+            utilization=settings.jijia_rate_limit_utilization,
+        )
+        auth_client = JijiaAuthClient(settings, rate_limiter=rate_limiter)
         token = auth_client.get_access_token()
         result = SyncEngine(api_configs).probe_api(
             api_code,
-            JijiaApiClient(settings, auth_client=auth_client),
+            JijiaApiClient(
+                settings,
+                auth_client=auth_client,
+                rate_limiter=rate_limiter,
+            ),
             token,
         )
     except HTTPError as error:
@@ -341,10 +364,20 @@ def _run_single_api(settings, api_code: str, action_label: str) -> None:
     api_configs = load_published_api_configs(engine)
     try:
         with _sync_task_lock(engine):
-            auth_client = JijiaAuthClient(settings)
+            rate_limiter = MySqlApiRateLimiter(
+                engine,
+                utilization=settings.jijia_rate_limit_utilization,
+            )
+            auth_client = JijiaAuthClient(settings, rate_limiter=rate_limiter)
             token = auth_client.get_access_token()
             result = SyncEngine(api_configs, engine).test_api_once(
-                api_code, JijiaApiClient(settings, auth_client=auth_client), token
+                api_code,
+                JijiaApiClient(
+                    settings,
+                    auth_client=auth_client,
+                    rate_limiter=rate_limiter,
+                ),
+                token,
             )
     except HTTPError as error:
         status_code = error.response.status_code if error.response is not None else "unknown"

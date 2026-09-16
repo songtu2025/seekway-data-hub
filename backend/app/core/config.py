@@ -33,6 +33,7 @@ class WebSettings(BaseSettings):
     worker_heartbeat_seconds: float = 30
     worker_stale_minutes: float = 10
     worker_name: str = Field(default="", max_length=50)
+    worker_processes: int = Field(default=1, ge=1)
     sync_lock_scope: SyncLockScope = "global"
 
     mail_provider: Literal["smtp", "console", "fake"] = "console"

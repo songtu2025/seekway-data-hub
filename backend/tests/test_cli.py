@@ -140,7 +140,11 @@ def test_discover_sale_return_start_uses_selected_web_account_credentials(
             api_config_path=Path("config/api_config.example.yaml"),
         ),
     )
-    monkeypatch.setattr(cli, "load_settings", lambda: object())
+    monkeypatch.setattr(
+        cli,
+        "load_settings",
+        lambda: SimpleNamespace(jijia_rate_limit_utilization=0.9),
+    )
     monkeypatch.setattr(
         cli,
         "load_published_api_config",

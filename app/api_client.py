@@ -4,6 +4,11 @@ from urllib.parse import urljoin
 import requests
 from requests import HTTPError
 
+from app.api_rate_limiter import (
+    RequestRateLimiter,
+    rate_limit_policy,
+    retry_after_seconds,
+)
 from app.auth import AccessToken
 from app.config import AppSettings
 
@@ -20,12 +25,14 @@ class JijiaApiClient:
         settings: AppSettings,
         timeout_seconds: int = 30,
         auth_client: Any | None = None,
+        rate_limiter: RequestRateLimiter | None = None,
     ):
         """创建可复用的 requests Session。"""
         self.settings = settings
         self.timeout_seconds = timeout_seconds
         self.session = requests.Session()
         self.auth_client = auth_client
+        self.rate_limiter = rate_limiter
         self._current_token: AccessToken | None = None
 
     def request(
@@ -47,10 +54,23 @@ class JijiaApiClient:
         effective_token = self._current_token or token
 
         try:
-            response = self._send(method, url, params, effective_token, timeout_seconds)
+            response = self._send(
+                api_config,
+                method,
+                url,
+                params,
+                effective_token,
+                timeout_seconds,
+            )
             response.raise_for_status()
         except HTTPError as error:
             error_response = error.response
+            if error_response is not None and error_response.status_code == 429:
+                self._defer_rate_limit(
+                    api_config,
+                    method,
+                    error_response.headers.get("Retry-After"),
+                )
             if (
                 error_response is None
                 or error_response.status_code != 401
@@ -60,8 +80,25 @@ class JijiaApiClient:
             # 长批次可能跨过 accessToken 生命周期；401 时强制刷新一次，避免整批后半段失败。
             effective_token = self.auth_client.get_access_token(force_refresh=True)
             self._current_token = effective_token
-            response = self._send(method, url, params, effective_token, timeout_seconds)
-            response.raise_for_status()
+            response = self._send(
+                api_config,
+                method,
+                url,
+                params,
+                effective_token,
+                timeout_seconds,
+            )
+            try:
+                response.raise_for_status()
+            except HTTPError as refresh_error:
+                refresh_response = refresh_error.response
+                if refresh_response is not None and refresh_response.status_code == 429:
+                    self._defer_rate_limit(
+                        api_config,
+                        method,
+                        refresh_response.headers.get("Retry-After"),
+                    )
+                raise
 
         payload = response.json()
         code = payload.get("code")
@@ -74,6 +111,7 @@ class JijiaApiClient:
 
     def _send(
         self,
+        api_config: dict[str, Any],
         method: str,
         url: str,
         params: dict[str, Any],
@@ -81,12 +119,34 @@ class JijiaApiClient:
         timeout_seconds: int,
     ) -> requests.Response:
         """发送一次业务请求；调用方负责状态码、业务 code 和重试控制。"""
+        if self.rate_limiter is not None:
+            self.rate_limiter.acquire(
+                method,
+                str(api_config["path"]),
+                rate_limit_policy(api_config),
+            )
         headers = {"accessToken": token.value}
         if method == "POST":
             return self.session.post(url, json=params, headers=headers, timeout=timeout_seconds)
         if method == "GET":
             return self.session.get(url, params=params, headers=headers, timeout=timeout_seconds)
         raise ValueError(f"unsupported API method: {method}")
+
+    def _defer_rate_limit(
+        self,
+        api_config: dict[str, Any],
+        method: str,
+        retry_after: str | None,
+    ) -> None:
+        """把 HTTP 429 的冷却窗口传播给使用同一接口的其他 Worker。"""
+        if self.rate_limiter is None:
+            return
+        policy = rate_limit_policy(api_config)
+        self.rate_limiter.defer(
+            method,
+            str(api_config["path"]),
+            retry_after_seconds(retry_after, policy.period_seconds),
+        )
 
     def request_url(self, api_config: dict[str, Any]) -> str:
         """根据单个 API 配置生成完整请求 URL。"""

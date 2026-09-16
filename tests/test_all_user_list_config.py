@@ -49,7 +49,7 @@ class AllUserListConfigTest(unittest.TestCase):
         self.assertEqual(api["primary_key"], {"field": "id", "required": True})
         self.assertEqual(api["date_field"], "createdTime")
         self.assertTrue(api["sensitive_response"])
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 1.1)
+        self.assertEqual(api["rate_limit"], {"max_requests": 1, "period_seconds": 1})
         self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
         self.assertEqual(api["params"], {})
         self.assertNotIn(api, SyncEngine(list(apis.values()))._enabled_apis())

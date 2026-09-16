@@ -68,7 +68,7 @@ class SaleReturnOrderPageConfigTest(unittest.TestCase):
             },
         )
         self.assertTrue(api["sensitive_response"])
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 0.2)
+        self.assertEqual(api["rate_limit"], {"max_requests": 5, "period_seconds": 1})
         self.assertEqual(api["params"], {"page": 1, "pagesize": 100})
         self.assertNotIn(9, reviews)
 

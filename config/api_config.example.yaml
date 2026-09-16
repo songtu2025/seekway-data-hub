@@ -18,8 +18,6 @@ apis:
       field: orderId
       required: false
     date_field: payTime
-    rate_limit:
-      sleep_seconds: 1
     params:
       startTime: "{{ checkpoint_or_default_start }}"
       endTime: "{{ current_time }}"
@@ -41,8 +39,6 @@ apis:
       field: productId
       required: false
     date_field: updatedAt
-    rate_limit:
-      sleep_seconds: 1
     params: {}
 
   # 已接入的真实示例接口：用于验证 token、分页、入库和日志链路。
@@ -67,7 +63,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 1
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -90,7 +87,8 @@ apis:
       required: false
     date_field: createdTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -110,7 +108,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -130,7 +129,8 @@ apis:
       required: false
     date_field: recordDate
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -155,7 +155,8 @@ apis:
       required: false
     date_field: lastDate
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -178,7 +179,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -202,7 +204,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 1
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -230,7 +233,8 @@ apis:
     date_field: updateTime
     sensitive_response: true
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -254,7 +258,8 @@ apis:
     date_field: updateTime
     sensitive_response: true
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -289,7 +294,8 @@ apis:
     date_field: updateAt
     sensitive_response: true
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -311,7 +317,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -336,7 +343,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -363,7 +371,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -390,7 +399,8 @@ apis:
       required: false
     date_field: lastDate
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -417,7 +427,8 @@ apis:
       required: false
     date_field: recordDate
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -444,7 +455,8 @@ apis:
       required: false
     date_field: lastDate
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -471,7 +483,8 @@ apis:
       required: false
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -498,7 +511,8 @@ apis:
       required: false
     date_field: createDate
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -526,7 +540,8 @@ apis:
     date_field: createDate
     sensitive_response: true
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -554,7 +569,8 @@ apis:
     date_field: ""
     sensitive_response: true
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -581,7 +597,8 @@ apis:
       required: false
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -603,7 +620,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -628,7 +646,8 @@ apis:
       required: false
     date_field: recordDate
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -650,7 +669,8 @@ apis:
       required: false
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -670,7 +690,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -695,7 +716,8 @@ apis:
       required: false
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -722,7 +744,8 @@ apis:
       required: false
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -749,7 +772,8 @@ apis:
       required: false
     date_field: marketTimeZone
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -776,7 +800,8 @@ apis:
       required: false
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -804,7 +829,8 @@ apis:
       required: false
     date_field: updateDate
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -831,7 +857,8 @@ apis:
       required: false
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -858,7 +885,8 @@ apis:
       required: false
     date_field: createdAt
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -885,7 +913,8 @@ apis:
       required: false
     date_field: createDate
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -912,7 +941,8 @@ apis:
       required: false
     date_field: createdAt
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -944,7 +974,8 @@ apis:
         - source_field: raw_json.poCode
           target_field: poCode
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -969,7 +1000,8 @@ apis:
       required: false
     date_field: createTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -996,7 +1028,8 @@ apis:
       required: false
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -1031,7 +1064,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1067,7 +1101,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1105,7 +1140,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1142,7 +1178,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1174,7 +1211,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1211,7 +1249,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1251,7 +1290,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 6
+      max_requests: 1
+      period_seconds: 5
     retry:
       retries: 1
       delay_seconds: 1
@@ -1290,7 +1330,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1320,7 +1361,8 @@ apis:
       required: false
     date_field: createTime
     rate_limit:
-      sleep_seconds: 3
+      max_requests: 1
+      period_seconds: 2
     retry:
       retries: 1
       delay_seconds: 1
@@ -1357,7 +1399,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 6
+      max_requests: 1
+      period_seconds: 5
     retry:
       retries: 1
       delay_seconds: 1
@@ -1397,7 +1440,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 3
+      max_requests: 1
+      period_seconds: 2
     retry:
       retries: 1
       delay_seconds: 1
@@ -1436,7 +1480,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 11
+      max_requests: 1
+      period_seconds: 10
     retry:
       retries: 1
       delay_seconds: 1
@@ -1463,7 +1508,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 3
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1487,7 +1533,8 @@ apis:
       required: false
     date_field: ""
     rate_limit:
-      sleep_seconds: 2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1520,7 +1567,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 1.1
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1554,7 +1602,8 @@ apis:
       default_start: "2026-07-02"
       days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1589,7 +1638,8 @@ apis:
       default_start: "2026-07-02"
       days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -1628,7 +1678,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 20
+      max_requests: 1
+      period_seconds: 5
     retry:
       retries: 1
       delay_seconds: 1
@@ -1667,7 +1718,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 20
+      max_requests: 1
+      period_seconds: 5
     retry:
       retries: 1
       delay_seconds: 1
@@ -1706,7 +1758,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 20
+      max_requests: 1
+      period_seconds: 5
     retry:
       retries: 1
       delay_seconds: 1
@@ -1745,7 +1798,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 20
+      max_requests: 1
+      period_seconds: 5
     retry:
       retries: 1
       delay_seconds: 1
@@ -1784,7 +1838,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 20
+      max_requests: 1
+      period_seconds: 5
     retry:
       retries: 1
       delay_seconds: 1
@@ -1823,7 +1878,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 20
+      max_requests: 1
+      period_seconds: 5
     retry:
       retries: 1
       delay_seconds: 1
@@ -1862,7 +1918,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 20
+      max_requests: 1
+      period_seconds: 5
     retry:
       retries: 1
       delay_seconds: 1
@@ -1897,7 +1954,8 @@ apis:
       default_start: "2026-07-02"
       days: 1
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -1930,7 +1988,8 @@ apis:
       default_start: "2026-07-02"
       days: 1
     rate_limit:
-      sleep_seconds: 65
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -1965,7 +2024,8 @@ apis:
       days: 1
       lag_days: 1
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -1993,7 +2053,8 @@ apis:
       required: true
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2028,7 +2089,8 @@ apis:
       default_start: "2026-07-02"
       days: 1
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2055,7 +2117,8 @@ apis:
       required: false
     date_field: updateTime
     rate_limit:
-      sleep_seconds: 0.5
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2084,7 +2147,8 @@ apis:
       required: false
     date_field: createdAt
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2113,7 +2177,8 @@ apis:
     date_field: updateTime
     sensitive_response: false
     rate_limit:
-      sleep_seconds: 1
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -2143,7 +2208,8 @@ apis:
     date_field: createdAt
     sensitive_response: true
     rate_limit:
-      sleep_seconds: 1
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -2172,7 +2238,8 @@ apis:
     date_field: createdAt
     sensitive_response: true
     rate_limit:
-      sleep_seconds: 1
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -2202,7 +2269,8 @@ apis:
       auto_advance: true
       exclude_existing_target: true
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2231,7 +2299,8 @@ apis:
         - source_field: raw_json.code
           target_field: code
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2258,7 +2327,8 @@ apis:
         - source_field: raw_json.country
           target_field: countryCode
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2290,7 +2360,8 @@ apis:
         - source_field: raw_json.opType
           equals: TFOutbound
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2322,7 +2393,8 @@ apis:
         - source_field: raw_json.opType
           equals: LNInbound
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2353,7 +2425,8 @@ apis:
         - source_field: raw_json.opType
           equals: OROutbound
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2375,7 +2448,8 @@ apis:
       required: true
     date_field: ""
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2405,7 +2479,8 @@ apis:
         - source_field: raw_json.warehouseId
           target_field: warehouseId
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 3
       delay_seconds: 1
@@ -2426,7 +2501,8 @@ apis:
     date_field: createdTime
     sensitive_response: true
     rate_limit:
-      sleep_seconds: 1.1
+      max_requests: 1
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -2457,7 +2533,8 @@ apis:
         - source_field: raw_json.attachmentVOList[].id
           target_field: id
     rate_limit:
-      sleep_seconds: 0.6
+      max_requests: 2
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1
@@ -2512,7 +2589,8 @@ apis:
         - marketName
     sensitive_response: true
     rate_limit:
-      sleep_seconds: 0.2
+      max_requests: 5
+      period_seconds: 1
     retry:
       retries: 1
       delay_seconds: 1

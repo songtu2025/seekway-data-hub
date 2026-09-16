@@ -5,10 +5,7 @@ from app.config import load_api_configs
 
 class SelfWarehousePageConfigTest(unittest.TestCase):
     def test_self_warehouse_page_is_raw_only_and_stays_disabled(self):
-        apis = {
-            api["api_code"]: api
-            for api in load_api_configs("config/api_config.example.yaml")
-        }
+        apis = {api["api_code"]: api for api in load_api_configs("config/api_config.example.yaml")}
 
         self.assertIn("self_warehouse_page", apis)
         api = apis["self_warehouse_page"]
@@ -31,7 +28,7 @@ class SelfWarehousePageConfigTest(unittest.TestCase):
         self.assertEqual(api["primary_key"], {"field": "id", "required": True})
         self.assertEqual(api["date_field"], "")
         self.assertTrue(api["sensitive_response"])
-        self.assertEqual(api["rate_limit"], {"sleep_seconds": 0.5})
+        self.assertEqual(api["rate_limit"], {"max_requests": 2, "period_seconds": 1})
         self.assertEqual(api["retry"], {"retries": 3, "delay_seconds": 1})
         self.assertEqual(api["params"], {"page": 1, "pagesize": 100})
 

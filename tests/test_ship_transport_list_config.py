@@ -27,7 +27,7 @@ class ShipTransportListConfigTest(unittest.TestCase):
         )
         self.assertEqual(api["primary_key"], {"field": "id", "required": False})
         self.assertEqual(api["date_field"], "")
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 1)
+        self.assertEqual(api["rate_limit"], {"max_requests": 1, "period_seconds": 1})
         self.assertEqual(api["params"], {"page": 1, "pagesize": 100})
 
 

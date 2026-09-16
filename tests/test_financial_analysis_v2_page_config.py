@@ -33,7 +33,7 @@ class FinancialAnalysisV2PageConfigTest(unittest.TestCase):
         self.assertEqual(window["days"], 1)
         self.assertEqual(window["lag_days"], 1)
 
-        self.assertEqual(api["rate_limit"]["sleep_seconds"], 11)
+        self.assertEqual(api["rate_limit"], {"max_requests": 1, "period_seconds": 10})
         self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
         self.assertEqual(
             api["params"],

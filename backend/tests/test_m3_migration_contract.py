@@ -7,6 +7,7 @@ from sqlalchemy import UniqueConstraint, create_engine, insert
 from sqlalchemy.dialects import mysql
 from sqlalchemy.exc import IntegrityError
 
+from app.api_rate_limiter import api_rate_limit_state_table
 from backend.app.models.sync_records import (
     api_config_table,
     failed_request_log_table,
@@ -52,6 +53,26 @@ def test_api_config_metadata_matches_runtime_registry_contract() -> None:
         "execution_stage",
         "published_at",
     }.issubset(columns)
+
+
+def test_api_rate_limit_state_migration_is_small_and_reversible() -> None:
+    migration_dir = ROOT / "sql" / "migrations"
+    upgrade_sql = (migration_dir / "0008_api_rate_limit_state.sql").read_text(encoding="utf-8")
+    rollback_sql = (migration_dir / "0008_api_rate_limit_state_down.sql").read_text(
+        encoding="utf-8"
+    )
+
+    assert "CREATE TABLE IF NOT EXISTS api_rate_limit_state" in upgrade_sql
+    assert "rate_limit_key VARCHAR(600) NOT NULL" in upgrade_sql
+    assert "next_allowed_at DATETIME(6) NOT NULL" in upgrade_sql
+    assert "PRIMARY KEY (rate_limit_key)" in upgrade_sql
+    assert "DROP TABLE api_rate_limit_state" in rollback_sql
+    assert set(api_rate_limit_state_table.c.keys()) == {
+        "rate_limit_key",
+        "next_allowed_at",
+        "created_at",
+        "updated_at",
+    }
 
 
 def test_upgrade_sql_is_manual_and_requires_snapshot_rollback() -> None:

@@ -288,7 +288,7 @@ def test_account_and_policy_actions_preserve_scope_and_redaction(
     assert updated.status_code == 200
     monkeypatch.setattr(
         "backend.app.services.jijia_account_service.verify_account_credentials",
-        lambda _app_id, _app_key: None,
+        lambda _app_id, _app_key, **_kwargs: None,
     )
     verified = harness.client.post(
         f"/api/v1/jijia-accounts/{account_id}/verify",
@@ -321,7 +321,7 @@ def test_account_and_policy_actions_preserve_scope_and_redaction(
     failed_account_id = failed_created.json()["data"]["id"]
     provider_error = "provider leaked failed-app and failed-key"
 
-    def fail_verification(_app_id: str, _app_key: str) -> None:
+    def fail_verification(_app_id: str, _app_key: str, **_kwargs) -> None:
         raise ValueError(provider_error)
 
     monkeypatch.setattr(
@@ -442,7 +442,9 @@ def test_verification_failure_commits_status_and_failure_audit(
     clear_audits(harness)
     monkeypatch.setattr(
         "backend.app.services.jijia_account_service.verify_account_credentials",
-        lambda _app_id, _app_key: (_ for _ in ()).throw(ValueError("private provider error")),
+        lambda _app_id, _app_key, **_kwargs: (_ for _ in ()).throw(
+            ValueError("private provider error")
+        ),
     )
 
     response = harness.client.post(

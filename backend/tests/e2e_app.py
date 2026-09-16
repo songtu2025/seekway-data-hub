@@ -65,7 +65,7 @@ def create_e2e_app() -> "FastAPI":
     )
     mail_sender = FakeMailSender()
 
-    def verify_credentials_locally(app_id: str, app_key: str) -> None:
+    def verify_credentials_locally(app_id: str, app_key: str, **_kwargs) -> None:
         """浏览器测试只确认本地凭据链路，禁止请求积加 Token。"""
         del app_id, app_key
 

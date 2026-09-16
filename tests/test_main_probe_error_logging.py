@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from requests import ConnectionError, HTTPError, Response
@@ -36,7 +37,10 @@ class MainProbeErrorLoggingTest(unittest.TestCase):
             self.assertLogs("app.main", level="ERROR") as logs,
             self.assertRaises(SystemExit) as raised,
         ):
-            main_module._probe_single_api(object(), "placeholder_api")
+            main_module._probe_single_api(
+                SimpleNamespace(jijia_rate_limit_utilization=0.9),
+                "placeholder_api",
+            )
 
         self.assertEqual(raised.exception.code, 1)
         message = "\n".join(logs.output)
@@ -69,7 +73,10 @@ class MainProbeErrorLoggingTest(unittest.TestCase):
             self.assertLogs("app.main", level="ERROR") as logs,
             self.assertRaises(SystemExit) as raised,
         ):
-            main_module._probe_single_api(object(), "placeholder_api")
+            main_module._probe_single_api(
+                SimpleNamespace(jijia_rate_limit_utilization=0.9),
+                "placeholder_api",
+            )
 
         self.assertEqual(raised.exception.code, 1)
         message = "\n".join(logs.output)

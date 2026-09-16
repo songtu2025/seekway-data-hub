@@ -65,6 +65,9 @@ class AppSettings(BaseSettings):
     jijia_app_key: str = "your_app_key"
     jijia_token_url: str = "/api_token"
     jijia_token_cache_path: Path = Path("logs/token_cache.json")
+    jijia_rate_limit_utilization: float = Field(default=0.9, gt=0, le=1)
+    jijia_token_rate_limit_requests: int = Field(default=10, ge=1)
+    jijia_token_rate_limit_period_seconds: float = Field(default=1, gt=0)
 
     db_host: str = "localhost"
     db_port: int = 3306
@@ -216,6 +219,7 @@ def load_api_configs(path: str | Path) -> list[dict[str, Any]]:
         raise ValueError("API config field 'apis' must be a list")
 
     seen_api_codes = set()
+    endpoint_rate_limits: dict[str, tuple[int, float]] = {}
     for index, api in enumerate(apis):
         if not isinstance(api, dict):
             raise ValueError(f"API config item at index {index} must be a mapping")
@@ -242,6 +246,32 @@ def load_api_configs(path: str | Path) -> list[dict[str, Any]]:
             raise ValueError(
                 f"API config {api_code} has unsupported checkpoint_kind: {checkpoint_kind}"
             )
+
+        rate_config = api.get("rate_limit")
+        if rate_config is None and api.get("enabled") is False:
+            continue
+        if not isinstance(rate_config, dict):
+            raise ValueError(f"API config {api_code} must define rate_limit")
+        max_requests = rate_config.get("max_requests")
+        period_seconds = rate_config.get("period_seconds")
+        if isinstance(max_requests, bool) or not isinstance(max_requests, int) or max_requests <= 0:
+            raise ValueError(
+                f"API config {api_code} rate_limit.max_requests must be a positive integer"
+            )
+        if (
+            isinstance(period_seconds, bool)
+            or not isinstance(period_seconds, (int, float))
+            or period_seconds <= 0
+        ):
+            raise ValueError(
+                f"API config {api_code} rate_limit.period_seconds must be greater than zero"
+            )
+        method = str(api.get("method") or "POST").strip().upper()
+        endpoint_key = f"{method} /{path_value.strip().lstrip('/')}"
+        endpoint_policy = (max_requests, float(period_seconds))
+        existing_policy = endpoint_rate_limits.setdefault(endpoint_key, endpoint_policy)
+        if existing_policy != endpoint_policy:
+            raise ValueError(f"API configs sharing endpoint {endpoint_key} must use one rate limit")
 
     return apis
 

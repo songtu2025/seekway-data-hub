@@ -47,7 +47,10 @@ class SalesAnalysisGroupConfigsTest(unittest.TestCase):
                 self.assertEqual(api["date_window"]["default_start"], default_start)
                 self.assertEqual(api["date_window"]["days"], 1)
                 self.assertEqual(api["date_window"]["lag_days"], 1)
-                self.assertEqual(api["rate_limit"]["sleep_seconds"], 20)
+                self.assertEqual(
+                    api["rate_limit"],
+                    {"max_requests": 1, "period_seconds": 5},
+                )
                 self.assertEqual(api["retry"]["retries"], 1)
                 self.assertEqual(api["params"]["groupByType"], group_by_type)
                 self.assertEqual(api["params"]["showCurrencyType"], "YUAN")

@@ -23,6 +23,15 @@ CREATE TABLE IF NOT EXISTS api_config (
   KEY idx_api_config_enabled (enabled, platform_enabled, read_only_verified)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 全部账号和 Worker 按积加单接口共享下一次可请求时间。
+CREATE TABLE IF NOT EXISTS api_rate_limit_state (
+  rate_limit_key VARCHAR(600) NOT NULL,
+  next_allowed_at DATETIME(6) NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (rate_limit_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 批次表；jijia_account_id=0 表示历史/legacy CLI 数据，sync_job_id 由应用层关联。
 CREATE TABLE IF NOT EXISTS sync_batch (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -11,6 +11,7 @@ from backend.app.models.worker_runtime import WorkerRuntime
 from backend.app.services.m3_common import utc_iso
 
 WorkerAvailability = Literal["online", "busy", "offline"]
+WorkerCapacityStatus = Literal["ready", "degraded", "offline"]
 
 
 def start_worker_runtime(db: Session, worker_name: str, instance_id: str) -> None:
@@ -71,27 +72,39 @@ def worker_runtime_data(db: Session, settings: WebSettings) -> dict[str, object]
     """聚合所有 Worker，返回页面和健康检查共用的脱敏摘要。"""
     runtimes = list(db.scalars(select(WorkerRuntime)).all())
     offline_after_seconds = max(int(settings.worker_heartbeat_seconds * 3), 1)
+    runtime_availability = {
+        runtime.worker_name: _availability(runtime, offline_after_seconds) for runtime in runtimes
+    }
     online_runtimes = [
-        runtime
-        for runtime in runtimes
-        if _availability(runtime, offline_after_seconds) != "offline"
+        runtime for runtime in runtimes if runtime_availability[runtime.worker_name] != "offline"
     ]
-    idle_runtime = next(
-        (
-            runtime
-            for runtime in online_runtimes
-            if runtime.status != "running" or runtime.current_job_id is None
-        ),
-        None,
+    busy_runtimes = [
+        runtime
+        for runtime in online_runtimes
+        if runtime_availability[runtime.worker_name] == "busy"
+    ]
+    online_worker_count = len(online_runtimes)
+    busy_worker_count = len(busy_runtimes)
+    idle_worker_count = online_worker_count - busy_worker_count
+    stale_worker_count = sum(
+        runtime.stopped_at is None and runtime_availability[runtime.worker_name] == "offline"
+        for runtime in runtimes
     )
-    busy_runtime = next(iter(online_runtimes), None) if idle_runtime is None else None
+    capacity_status: WorkerCapacityStatus
+    if online_worker_count == 0:
+        capacity_status = "offline"
+    elif online_worker_count < settings.worker_processes:
+        capacity_status = "degraded"
+    else:
+        capacity_status = "ready"
     availability: WorkerAvailability
-    if idle_runtime is not None:
+    if idle_worker_count > 0:
         availability = "online"
-    elif busy_runtime is not None:
+    elif busy_worker_count > 0:
         availability = "busy"
     else:
         availability = "offline"
+    busy_runtime = next(iter(busy_runtimes), None)
     latest_runtime = max(runtimes, key=lambda runtime: runtime.heartbeat_at, default=None)
     queue_depth = db.scalar(
         select(func.count(SyncJob.id)).where(
@@ -107,6 +120,12 @@ def worker_runtime_data(db: Session, settings: WebSettings) -> dict[str, object]
     )
     return {
         "availability": availability,
+        "capacityStatus": capacity_status,
+        "configuredWorkerCount": settings.worker_processes,
+        "onlineWorkerCount": online_worker_count,
+        "busyWorkerCount": busy_worker_count,
+        "idleWorkerCount": idle_worker_count,
+        "staleWorkerCount": stale_worker_count,
         "heartbeatAt": utc_iso(latest_runtime.heartbeat_at) if latest_runtime else None,
         "currentJobId": busy_runtime.current_job_id if busy_runtime else None,
         "queueDepth": int(queue_depth or 0),

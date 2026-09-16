@@ -1,9 +1,12 @@
 import secrets
+from typing import cast
 
 from requests import RequestException
 from sqlalchemy import func, select
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+from app.api_rate_limiter import MySqlApiRateLimiter, RequestRateLimiter
 from app.auth import JijiaAuthClient, JijiaCredentials
 from app.config import load_settings
 from backend.app.core.config import WebSettings
@@ -155,7 +158,15 @@ def verify_account(
     app_key = cipher.decrypt(frozen_app_key)
     verification_error: RequestException | ValueError | None = None
     try:
-        verify_account_credentials(app_id, app_key)
+        runtime_settings = load_settings()
+        verify_account_credentials(
+            app_id,
+            app_key,
+            rate_limiter=MySqlApiRateLimiter(
+                cast(Engine, db.get_bind()),
+                utilization=runtime_settings.jijia_rate_limit_utilization,
+            ),
+        )
     except (RequestException, ValueError) as error:
         verification_error = error
 
@@ -219,12 +230,18 @@ def verify_account(
     return account
 
 
-def verify_account_credentials(app_id: str, app_key: str) -> None:
+def verify_account_credentials(
+    app_id: str,
+    app_key: str,
+    *,
+    rate_limiter: RequestRateLimiter | None = None,
+) -> None:
     """使用显式凭证请求一次官方 Token，且不写本地 Token 缓存。"""
     client = JijiaAuthClient(
         load_settings(),
         credentials=JijiaCredentials(app_id=app_id, app_key=app_key),
         use_token_cache=False,
+        rate_limiter=rate_limiter,
     )
     client.get_access_token(force_refresh=True)
 

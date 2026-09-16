@@ -1,18 +1,21 @@
 import argparse
 import json
 import math
-import time
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
-import requests
+from requests import RequestException
 
 from app.api_client import JijiaApiClient
+from app.api_config_registry import load_published_api_config
+from app.api_rate_limiter import MySqlApiRateLimiter
 from app.auth import JijiaAuthClient
 from app.config import load_settings
+from app.db import create_db_engine
 from app.sale_return_discovery import discover_earliest_date
 
-API_PATH = "/operation/sale/returnOrder/page"
+API_CODE = "sale_return_order_page"
 
 
 def parse_args() -> argparse.Namespace:
@@ -72,19 +75,9 @@ def build_request_body(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def summarize_response(response: requests.Response) -> dict[str, Any]:
+def summarize_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """只保留排查所需元数据，禁止输出退货订单明细。"""
-    result: dict[str, Any] = {"http_status": response.status_code}
-    try:
-        payload = response.json()
-    except requests.JSONDecodeError:
-        result["error"] = "响应不是有效 JSON"
-        return result
-
-    if not isinstance(payload, dict):
-        result["error"] = "响应 JSON 顶层不是对象"
-        return result
-
+    result: dict[str, Any] = {"http_status": 200}
     result["business_code"] = payload.get("code")
     result["trace_id"] = payload.get("traceId") or payload.get("trace_id")
     messages = payload.get("messages")
@@ -104,10 +97,8 @@ def summarize_response(response: requests.Response) -> dict[str, Any]:
 
 
 def request_all_pages(
-    url: str,
+    request_page: Callable[[dict[str, Any]], dict[str, Any]],
     request_body: dict[str, Any],
-    access_token: str,
-    timeout_seconds: int,
 ) -> dict[str, Any]:
     """按实时 total 拉取完整窗口，返回不含订单明细的汇总。"""
     page_no = int(request_body["page"])
@@ -121,15 +112,10 @@ def request_all_pages(
 
     while True:
         page_body = {**request_body, "page": page_no}
-        response = requests.post(
-            url,
-            json=page_body,
-            headers={"accessToken": access_token},
-            timeout=timeout_seconds,
-        )
+        payload = request_page(page_body)
         request_count += 1
-        last_summary = summarize_response(response)
-        if not response.ok or last_summary.get("business_code") not in (0, 200):
+        last_summary = summarize_payload(payload)
+        if last_summary.get("business_code") not in (0, 200):
             return {
                 **last_summary,
                 "data_summary": {
@@ -155,8 +141,6 @@ def request_all_pages(
         if page_no * page_size >= total_count:
             break
 
-        # 官方默认每秒 5 次，完整分页测试按 0.2 秒间隔执行。
-        time.sleep(0.2)
         page_no += 1
 
     required_pages = max(1, math.ceil(total_count / page_size))
@@ -191,39 +175,49 @@ def main() -> int:
             request_body["pagesize"] = 1
 
         settings = load_settings()
-        auth_client = JijiaAuthClient(settings, timeout_seconds=args.timeout_seconds)
+        engine = create_db_engine(settings)
+        with engine.connect() as connection:
+            api_config = load_published_api_config(connection, API_CODE)
+        if api_config is None:
+            raise ValueError("退货订单接口配置不存在")
+        rate_limiter = MySqlApiRateLimiter(
+            engine,
+            utilization=settings.jijia_rate_limit_utilization,
+        )
+        auth_client = JijiaAuthClient(
+            settings,
+            timeout_seconds=args.timeout_seconds,
+            rate_limiter=rate_limiter,
+        )
         token = auth_client.get_access_token()
-        api_client = JijiaApiClient(settings, timeout_seconds=args.timeout_seconds)
-        url = api_client.request_url({"path": API_PATH})
+        api_client = JijiaApiClient(
+            settings,
+            timeout_seconds=args.timeout_seconds,
+            auth_client=auth_client,
+            rate_limiter=rate_limiter,
+        )
+
+        def request_page(body: dict[str, Any]) -> dict[str, Any]:
+            return api_client.request(api_config, token, body)
 
         if args.discover_earliest:
             response_summary = {
                 "discovery": discover_earliest_date(
-                    url,
+                    request_page,
                     date.fromisoformat(args.return_start_date),
                     date.fromisoformat(args.return_end_date),
-                    token.value,
-                    args.timeout_seconds,
                 )
             }
         elif args.all_pages:
             response_summary = request_all_pages(
-                url,
+                request_page,
                 request_body,
-                token.value,
-                args.timeout_seconds,
             )
         else:
-            response = requests.post(
-                url,
-                json=request_body,
-                headers={"accessToken": token.value},
-                timeout=args.timeout_seconds,
-            )
-            response_summary = summarize_response(response)
+            response_summary = summarize_payload(request_page(request_body))
         result = {
             "method": "POST",
-            "path": API_PATH,
+            "path": api_config["path"],
             "request_body": request_body,
             **response_summary,
         }
@@ -235,7 +229,7 @@ def main() -> int:
         elif args.all_pages:
             successful = successful and bool((result.get("data_summary") or {}).get("complete"))
         return 0 if successful else 1
-    except (ValueError, requests.RequestException) as error:
+    except (ValueError, RequestException) as error:
         print(
             json.dumps(
                 {
