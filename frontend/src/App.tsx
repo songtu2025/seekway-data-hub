@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { AppShell } from "./components/AppShell";
 import { useAuth } from "./auth/AuthContext";
+import { PRODUCT_NAME } from "./config/product";
 
 const AccountOnboardingPage = lazy(() =>
   import("./pages/AccountOnboardingPage").then((module) => ({
@@ -90,11 +91,31 @@ const SyncRunsPage = lazy(() =>
   import("./pages/SyncRunsListPage").then((module) => ({ default: module.SyncRunsPage })),
 );
 
-const routeLoading = (
-  <div className="app-loading">
-    <Spin /> 页面加载中…
-  </div>
-);
+function AppRestoreSkeleton({ message = "正在加载页面…" }: { message?: string }) {
+  return (
+    <div className="app-restore-shell">
+      <aside className="app-restore-sidebar" aria-hidden="true">
+        <div className="brand-lockup brand-lockup--dark">
+          <img alt="" className="brand-mark brand-mark--image" src="/favicon.svg" />
+          <span>{PRODUCT_NAME}</span>
+        </div>
+        <span className="app-restore-nav-line" />
+        <span className="app-restore-nav-line" />
+        <span className="app-restore-nav-line" />
+        <span className="app-restore-nav-line" />
+      </aside>
+      <main className="app-restore-content" aria-busy="true" aria-live="polite">
+        <div className="app-restore-heading" aria-hidden="true" />
+        <div className="app-restore-card" aria-hidden="true" />
+        <div className="app-restore-message">
+          <Spin size="small" /> {message}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+const routeLoading = <AppRestoreSkeleton />;
 
 function ProtectedRoute({
   children,
@@ -107,12 +128,7 @@ function ProtectedRoute({
 }) {
   const { ready, user } = useAuth();
   const location = useLocation();
-  if (!ready)
-    return (
-      <div className="app-loading">
-        <Spin /> 正在恢复登录状态…
-      </div>
-    );
+  if (!ready) return <AppRestoreSkeleton message="正在恢复登录状态…" />;
   if (!user) {
     const from = `${location.pathname}${location.search}${location.hash}`;
     return <Navigate replace state={{ from }} to="/login" />;
@@ -160,12 +176,7 @@ function SyncJobsRoute() {
 
 export function App() {
   const { ready, retrySession, sessionUnavailable } = useAuth();
-  if (!ready)
-    return (
-      <div className="app-loading">
-        <Spin /> 正在恢复登录状态…
-      </div>
-    );
+  if (!ready) return <AppRestoreSkeleton message="正在恢复登录状态…" />;
   if (sessionUnavailable) {
     return (
       <main className="app-loading">

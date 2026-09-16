@@ -779,3 +779,68 @@ a {
   font-size: 13px;
   font-weight: 500;
 }
+
+.app-restore-shell {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--color-surface-page);
+}
+
+.app-restore-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4);
+  background: var(--gradient-sidebar);
+}
+
+.app-restore-nav-line {
+  width: 72%;
+  height: 38px;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sidebar-hover);
+}
+
+.app-restore-content {
+  padding: var(--page-padding);
+}
+
+.app-restore-message {
+  color: var(--color-text-secondary);
+}
+
+.app-restore-heading,
+.app-restore-card {
+  border-radius: var(--radius-card);
+  background: var(--color-surface-container);
+}
+
+.app-restore-heading {
+  width: 240px;
+  height: 40px;
+  margin-bottom: var(--space-6);
+}
+
+.app-restore-card {
+  width: 100%;
+  height: 240px;
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--color-border-default);
+}
+
+@media (max-width: 900px) {
+  .app-restore-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .app-restore-sidebar {
+    min-height: 76px;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .app-restore-nav-line {
+    width: 64px;
+  }
+}
