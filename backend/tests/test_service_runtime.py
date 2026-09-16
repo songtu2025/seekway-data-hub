@@ -41,45 +41,18 @@ def test_service_logging_emits_application_info_without_exception_text() -> None
             project_logger.propagate = propagate
 
 
-def test_native_ecs_service_templates_use_bounded_api_workers_and_journal_only() -> None:
-    api = (ROOT / "config" / "ecs" / "seekway-datahub-api.service.example").read_text(
-        encoding="utf-8"
-    )
-    scheduler = (ROOT / "config" / "ecs" / "seekway-datahub-scheduler.service.example").read_text(
-        encoding="utf-8"
-    )
-    worker = (ROOT / "config" / "ecs" / "seekway-datahub-worker@.service.example").read_text(
-        encoding="utf-8"
-    )
+def test_docker_runtime_uses_non_root_user_and_bounded_api_workers() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
 
-    for service in (api, scheduler, worker):
-        assert "User=__SERVICE_USER__" in service
-        assert "WorkingDirectory=__PROJECT_ROOT__" in service
-        assert "EnvironmentFile=__ENV_FILE__" in service
-        assert "StandardOutput=journal" in service
-        assert "StandardError=journal" in service
-        assert "Restart=on-failure" in service
-        assert "backend.app.release_preflight --confirm-read-only-database" in service
-        assert "Docker" not in service
-
-    assert "--host 127.0.0.1" in api
-    assert "--port 8000" in api
-    assert "Environment=API_WORKERS=2" in api
-    assert api.index("Environment=API_WORKERS=2") < api.index("EnvironmentFile=__ENV_FILE__")
-    assert "--workers ${API_WORKERS}" in api
-    assert "--reload" not in api
-    assert "RuntimeDirectory=seekway-data-hub" in scheduler
-    assert "/usr/bin/flock --no-fork --nonblock" in scheduler
-    assert "python -m backend.app.scheduler" in scheduler
-    assert "scheduler.lock" in scheduler
-    assert "TimeoutStopSec=30" in scheduler
-    assert "python -m backend.app.worker" in worker
-    assert "Description=SEEKWAY Data Hub Worker %i" in worker
-    assert "Environment=WORKER_PROCESSES=__WORKER_PROCESSES__" in worker
-    assert "Environment=WORKER_NAME=%i" in worker
-    assert "worker.lock" not in worker
-    assert "TimeoutStopSec=3h" in worker
-    assert "TimeoutStopSec=infinity" not in worker
+    assert "FROM python:3.11.12-slim-bookworm AS app-runtime" in dockerfile
+    assert "USER seekway-datahub" in dockerfile
+    assert "COPY . " not in dockerfile
+    assert '--workers "$${API_WORKERS:-2}"' in compose
+    assert '"127.0.0.1:${SEEKWAY_API_PORT:-8000}:8000"' in compose
+    assert "stop_grace_period: 3h" in compose
+    assert "read_only: true" in compose
+    assert "no-new-privileges:true" in compose
 
 
 def test_windows_worker_script_uses_worker_module() -> None:

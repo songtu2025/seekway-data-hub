@@ -1,7 +1,8 @@
 # SEEKWAY Data Hub 工作交接
 
 > 历史文档说明（2026-09-08）：本文件记录实施前的规划交接，下面的“尚未实施”、
-> “阶段 0 + M1”、Docker Compose 和旧启动提示均已失效，不能作为当前执行依据。当前职责、
+> “阶段 0 + M1”和旧启动提示均已失效，不能作为当前执行依据。生产部署已于 2026-09-16
+> 改为 Docker Compose；正文中的 systemd 方案只用于追溯。当前职责、
 > 实现状态和下一门禁以根目录 `AGENTS.md`、`README.md`、完整实施方案顶部状态及
 > `docs/next_prompt.md` 当前平台交接为准；保留正文仅用于追溯早期决策。
 >
@@ -489,7 +490,7 @@ git diff --check -- docs/web-service-implementation-plan.md 通过
   -> legacy 数据归属
   -> 停止 legacy cron
   -> Web Scheduler 独占生产调度
-  -> SMTP、HTTPS、systemd/Nginx 和 ECS 验收
+  -> SMTP、HTTPS、Docker Compose/Nginx 和 ECS 验收
 ```
 
 所有数据模型、API、Worker、迁移、测试、部署和回滚细节，以完整实施方案为准。

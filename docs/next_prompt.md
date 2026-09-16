@@ -23,24 +23,24 @@
 
 ## 当前事实
 
-- Web 平台本地 MVP 已形成，包含账号、策略、任务、Scheduler、Worker、运行追踪、原始数据、审计、接口中心和 ECS 原生部署模板。
-- 产品展示名统一为 `SEEKWAY 数据接入中心`，英文名为 `SEEKWAY Data Hub`，生产域名为 `datahub.seekwaygroup.com`；生产 systemd 前缀统一为 `seekway-datahub-*`。
+- Web 平台本地 MVP 已形成，包含账号、策略、任务、Scheduler、Worker、运行追踪、原始数据、审计、接口中心和 ECS Docker Compose 部署配置。
+- 产品展示名统一为 `SEEKWAY 数据接入中心`，英文名为 `SEEKWAY Data Hub`，生产域名为 `datahub.seekwaygroup.com`；Compose 项目名为 `seekway-data-hub`。
 - 并发候选使用四个独立 Worker、`SKIP LOCKED` 唯一领取、账号级 named lock，以及按 HTTP 方法与路径跨账号共享的数据库单接口限流；生产只允许按 1→2→4 灰度。
 - 数据库 `api_config` 是唯一运行时接口配置源；YAML 和官方目录只用于开发、审核和受控发布。
 - 第一阶段 legacy 数据默认归属 `jijia_account_id=0`，迁移到平台正数账号前必须明确目标账号和历史基线。
-- 当前代码和本地测试不能替代真实 MySQL/PolarDB、积加 API、SMTP、HTTPS、systemd/Nginx 和 ECS 证据。
-- 尚未完成 GitHub 仓库改名、生产迁移、数据归属、调度割接或部署，不得宣称项目已经生产完成。
+- 当前代码和本地测试不能替代真实 MySQL/PolarDB、积加 API、SMTP、HTTPS、Docker Compose/Nginx 和 ECS 证据。
+- GitHub 仓库改名和主线基线收口已完成；生产迁移、数据归属、调度割接和部署尚未完成，不得宣称项目已经生产完成。
 - 工作区仍可能包含用户自己的界面和架构图改动。每次提交前必须逐项核对，不得覆盖、顺带提交或删除这些文件。
 
 ## 当前唯一主线
 
 1. 在获准的类生产 ECS 与隔离 MySQL/PolarDB 副本执行只读 preflight、迁移和恢复演练。
-2. 使用 systemd 按 1→2→4 启动 Worker，核对容量、队列、连接预算、进程重启和失联恢复；任一门禁失败即回退到单 Worker。
+2. 使用 Docker Compose 按 1→2→4 扩容 Worker，核对容量、队列、连接预算、容器重启和失联恢复；任一门禁失败即回退到单 Worker。
 3. 明确并执行 legacy `jijia_account_id=0` 数据到真实平台账号的受控归属。
 4. 建立逐账号、逐 API 的调度割接清单；启用 Web 策略前先停止对应 legacy 调度。
 5. 经单独授权后选择低数据量只读接口进行真实积加小流量验证，不主动压测同一接口。
 6. 完成全部接口割接后停用生产 `--sync-enabled` cron，使 Web Scheduler 成为唯一生产定时任务来源。
-7. 完成 SMTP、HTTPS Cookie、systemd、Nginx、ECS 和真实 Worker 验收，并观察至少两个完整调度周期。
+7. 完成 SMTP、HTTPS Cookie、Docker Compose、Nginx、ECS 和真实 Worker 验收，并观察至少两个完整调度周期。
 8. 生产证据完整后再清理不再需要的 legacy 业务同步入口；配置校验、连接检查、只读探测和迁移能力可以保留。
 
 ## 调度与数据不变量
@@ -62,6 +62,6 @@
 - 不要为了继续接入接口而推迟平台生产收口。
 - 不要未经授权连接生产数据库、执行迁移、归属 DML、真实同步或部署。
 - 不要读取或输出 `.env`、Token、真实凭证、数据库密码和未脱敏业务数据。
-- 不要引入 Redis、Celery、Kafka、Docker、自动扩缩容或超过四个 Worker，除非真实运行证据证明当前架构不能满足需求并获得用户确认。
+- 不要引入 Redis、Celery、Kafka、容器数据库、自动扩缩容或超过四个 Worker，除非真实运行证据证明当前架构不能满足需求并获得用户确认。
 
 下一项工作应先提交精简方案，说明修改文件、数据库与部署影响、风险、验证和回滚，获得确认后再实施。

@@ -1,9 +1,9 @@
 # SEEKWAY Data Hub 完整实施方案
 
-> 现行部署基线覆盖说明（2026-08-26）：根目录 `AGENTS.md` 已确认生产继续使用
-> 阿里云 ECS + systemd，不引入 Docker。本文早期 M4 中的 Dockerfile、
-> Compose 和镜像发布条目已失效；后续实施以 ECS 原生 FastAPI/Worker 服务、Nginx
-> 静态资源与反向代理为准。legacy cron 只允许存在于尚未完成的平台割接期，不属于最终生产架构。
+> 现行部署基线覆盖说明（2026-09-16）：生产改为阿里云 ECS + Docker Compose，
+> 宿主机 Nginx/Certbot 继续负责公网入口和 TLS。API、Scheduler、Worker 和前端由 Compose 管理，
+> PolarDB 保持外部托管；本文遗留的 systemd 描述仅作历史追溯，以本节和 README 为准。
+> legacy cron 只允许存在于尚未完成的平台割接期，不属于最终生产架构。
 
 > 文档状态：M1～M4 本地 MVP 已实施，外部迁移与 ECS 发布待授权验证
 > 适用范围：桌面端 Web 管理后台
@@ -31,7 +31,7 @@
 - 队列：使用数据库任务队列，不引入 Redis、Celery、RabbitMQ。
 - 登录：管理员邀请，用户通过邮箱设置密码完成注册；不接入第三方登录。
 - 会话：服务端 Session Cookie，不在 `localStorage` 保存登录令牌。
-- 部署：生产环境使用 ECS 原生 systemd + Nginx；开发、测试环境在 Windows 电脑运行。
+- 部署：生产环境使用 ECS、Docker Compose 和宿主机 Nginx/Certbot；开发、测试环境在 Windows 电脑运行。
 - 同步内核：复用现有 `app/sync_engine.py` 等模块，不重写已验证的同步能力。
 
 该架构优先解决当前业务问题，并保留以后拆分调度器、队列或多个 Worker 的空间，但第一版不提前引入这些复杂度。
@@ -58,7 +58,7 @@
 - Worker 可执行手动任务和到期的定时任务。
 - 多账号数据在原始数据、checkpoint、批次和日志中完全隔离。
 - 用户可从桌面端查看同步状态、错误和原始数据。
-- 生产环境可通过 ECS 原生 systemd + Nginx 部署并可回滚。
+- 生产环境可通过 ECS、Docker Compose 和宿主机 Nginx 部署并可按镜像标签回滚。
 
 ### 2.3 第一版不做
 
@@ -361,23 +361,24 @@ playwright
 - 集成测试每次运行前应用 Alembic migration，测试后清理本次数据。
 - E2E 使用 Playwright 启动本地 API 和 Vite 测试服务。
 
-### 8.3 生产环境：ECS 原生服务
+### 8.3 生产环境：ECS Docker Compose
 
-PolarDB 是外部托管数据库。第一版不启动 Redis，也不引入容器运行时。
+PolarDB 是外部托管数据库。Compose 不启动 MySQL 或 Redis。
 
 部署约束：
 
 - Nginx 是唯一暴露公网端口的服务。
-- API 和 Worker 使用同一发布目录、不同 systemd unit 和启动命令。
-- API 仅监听 `127.0.0.1:8000`；前端由 `npm ci && npm run build` 生成静态资源并交给 Nginx。
+- API、Scheduler 和 Worker 复用同一非 root Python 镜像，使用不同启动命令。
+- API 仅映射到 `127.0.0.1:8000`，前端容器仅映射到 `127.0.0.1:8080`。
 - migration 由部署命令单次执行，不能由多个 API/Worker 启动时自动抢跑。
-- Worker 第一版固定一个 systemd 实例，并用 `flock` 防止重复启动。
-- 运行 `.env` 与迁移 `.env.migration` 分离；systemd 只能读取最小权限运行配置。
-- API、Worker 使用非 root 服务用户，日志输出到 journald。
+- Worker 使用一个可扩容服务，生产只允许按 1→2→4 调整副本数。
+- Scheduler 和 Worker 位于默认关闭的 `runtime` profile，避免误启动生产调度。
+- 运行 `.env` 与迁移 `.env.migration` 分离；运行容器只能读取最小权限配置。
+- 应用容器使用非 root 用户、只读根文件系统和受限日志轮转。
 
 ### 8.4 规范在 Windows 的执行方式
 
-Windows 使用 `scripts/check.ps1` 完成本地代码门禁。Linux/ECS 发布前另执行只读 `release_preflight`、`systemd-analyze verify` 和 `nginx -t`；这些外部检查未执行时必须明确记录，不能把跳过伪装成通过。
+Windows 使用 `scripts/check.ps1` 完成本地代码门禁。Linux/ECS 发布前另执行镜像构建、`docker compose config`、只读 `release_preflight` 和 `nginx -t`；这些外部检查未执行时必须明确记录，不能把跳过伪装成通过。
 
 ## 9. 配置和密钥
 
@@ -1114,13 +1115,13 @@ Worker：
 
 ### 20.5 M4：发布准备
 
-目标：完成 ECS 原生服务、Nginx、安全启动门禁、备份和发布演练。
+目标：完成 ECS Docker Compose、宿主机 Nginx、安全启动门禁、备份和发布演练。
 
 任务：
 
-1. 创建 FastAPI 和单 Worker 的 systemd unit 模板。
-2. 配置 Nginx TLS、静态资源、反向代理和登录限流。
-3. API、Worker 使用非 root 用户并输出到 journald。
+1. 创建前端、FastAPI、Scheduler 和 Worker 的 Docker Compose 配置。
+2. 配置宿主机 Nginx TLS、反向代理和登录限流。
+3. 应用容器使用非 root 用户、只读根文件系统和受限 Docker 日志。
 4. 增加 liveness/readiness、启动配置和运行数据库只读门禁。
 5. 分离运行凭据与迁移凭据。
 6. 建立数据库备份和恢复演练。
@@ -1131,16 +1132,16 @@ Worker：
 
 验收：
 
-- `systemd-analyze verify`、`nginx -t` 和只读 `release_preflight` 通过。
+- `docker compose config`、镜像构建、`nginx -t` 和只读 `release_preflight` 通过。
 - 新服务器按发布步骤可一次启动。
 - API 未就绪时 Nginx 不错误导流。
-- Worker 同时只有一个实例执行。
+- Worker 按 1→2→4 灰度扩容且健康计数准确。
 - 生产环境不能启用 Console 邮件。
 - 备份可恢复，恢复后的任务和历史数据可查询。
 - 所有关键 E2E 和现有同步回归测试通过。
 - 生产 legacy cron 已停用，所有日常同步均由 Web Scheduler 和 Worker 发起。
 
-回滚：保留上一发布目录及 systemd/Nginx 配置；应用可回退，数据库只执行经过验证的前向修复或兼容迁移，不在现场盲目删除列和索引。
+回滚：保留上一稳定镜像标签和宿主机 Nginx 配置；应用可切回旧镜像，数据库只执行经过验证的前向修复或兼容迁移，不在现场盲目删除列和索引。
 
 ## 21. 文件级实施清单
 
@@ -1150,7 +1151,7 @@ Worker：
 | M1 | `backend/app/models/user.py`、`auth_token.py`、`session.py`、认证服务和路由、登录/注册/成员页面、`0001` |
 | M2 | `jijia_account.py`、`account_api_policy.py`、凭证/策略服务和路由、账号/策略页面、`0002`、现有 `app/auth.py` 的账号参数化 |
 | M3 | `sync_job.py`、`audit_log.py`、Worker、任务/运行/原始数据路由和页面、`0003`、`0004`、现有同步仓储的账号维度改造 |
-| M4 | `config/ecs/*.service.example`、`config/ecs/nginx.conf.example`、`release_preflight`、生产配置和 E2E |
+| M4 | `Dockerfile`、`compose.yaml`、`config/docker/*`、`config/ecs/nginx.conf.example`、`release_preflight`、生产配置和 E2E |
 
 每个阶段只修改该阶段需要的文件；不借机格式化或重写无关代码。
 
@@ -1248,13 +1249,11 @@ git diff --check
 ### 23.4 生产发布前
 
 ```bash
-cd frontend && npm ci && npm run build && cd ..
-./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service api
-./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service scheduler
-./.venv/bin/python -m backend.app.release_preflight --confirm-read-only-database --service worker
-sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-api.service
-sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-scheduler.service
-sudo systemd-analyze verify /etc/systemd/system/seekway-datahub-worker@.service
+export SEEKWAY_IMAGE_TAG="$(git rev-parse --short=12 HEAD)"
+export SEEKWAY_ENV_FILE=/etc/seekway-data-hub.env
+docker compose config --quiet
+docker compose build frontend api
+docker compose up -d frontend api
 sudo nginx -t
 curl --fail https://datahub.seekwaygroup.com/health/ready
 ```
@@ -1263,15 +1262,15 @@ curl --fail https://datahub.seekwaygroup.com/health/ready
 
 ## 24. 发布步骤
 
-1. 确认全部检查通过并准备不可变发布目录。
+1. 确认全部检查通过并构建带提交标签的不可变镜像。
 2. 备份 PolarDB，并验证备份状态。
 3. 暂停旧定时入口，停止 Worker 领取新任务。
 4. 等待正在执行的同步完成；不能直接杀死正常运行中的长任务。
 5. 在备份副本或预发布库再次验证 migration。
-6. 部署新发布目录，但暂不开放公网流量。
+6. 启动新 API 和前端容器，但暂不开放公网流量。
 7. 单次执行 Alembic upgrade。
 8. 启动 API，检查 readiness。
-9. 启动唯一 Worker，检查心跳。
+9. 启动一个 Worker 副本，检查心跳后按 1→2→4 灰度。
 10. 启动 Nginx 并执行登录、账号列表和任务查询冒烟测试。
 11. 创建一个受控测试任务，确认 job、batch、日志和数据链路。
 12. 开放流量并观察错误率、Worker 心跳和数据库负载。
@@ -1280,7 +1279,7 @@ curl --fail https://datahub.seekwaygroup.com/health/ready
 
 ### 25.1 应用回滚
 
-- 保留上一发布目录及已验证的 systemd、Nginx 配置。
+- 保留上一稳定镜像标签及已验证的宿主机 Nginx 配置。
 - 停止新 Worker，避免新旧 Worker 同时运行。
 - 将 API、Worker、前端切回兼容上一版。
 - 恢复旧定时入口前，确认没有 queued/running 新任务被重复执行。
@@ -1313,7 +1312,7 @@ curl --fail https://datahub.seekwaygroup.com/health/ready
 - [ ] Admin、Operator、Viewer 权限符合矩阵。
 - [ ] 桌面端主要流程完成 E2E。
 - [ ] Windows 无 Docker 可开发和测试。
-- [ ] 生产 ECS 原生服务可构建、部署、检查和回滚。
+- [ ] 生产 ECS Docker Compose 可构建、部署、检查和回滚。
 - [ ] migration 已在生产备份副本演练。
 - [ ] 生产备份恢复演练成功。
 - [ ] 仓库、构建产物、日志和数据库中没有不应存在的明文密钥。
@@ -1344,9 +1343,9 @@ curl --fail https://datahub.seekwaygroup.com/health/ready
 | Worker 意外退出 | 任务永久 running | 心跳、失联检测和显式恢复规则 |
 | 凭证泄露 | 账号和数据风险 | 字段加密、响应脱敏、日志清洗、密钥外置 |
 | migration 锁表时间长 | 生产不可用 | 备份副本演练、维护窗口、索引耗时评估 |
-| Windows 与 Linux 行为差异 | 开发通过但部署失败 | Windows 检查加 ECS 原生 systemd/Nginx 验证 |
+| Windows 与 Linux 行为差异 | 开发通过但部署失败 | Windows 检查加 ECS Docker Compose/Nginx 验证 |
 | 接口规则靠猜测 | 数据缺失或请求违规 | YAML 只采用官方文档确认规则 |
-| 引入过多基础设施 | 开发和运维成本上升 | 第一版只用 MySQL 队列和单 Worker |
+| 引入过多基础设施 | 开发和运维成本上升 | Compose 只运行现有服务，不增加 Redis、Celery 或容器数据库 |
 
 ## 29. 建议工期与启动条件
 
