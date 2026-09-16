@@ -107,12 +107,28 @@ function expectSelectText(label: string, value: string) {
   );
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}
+
 describe("同步任务定时计划页", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authState.role = "operator";
     vi.mocked(api.getWorkerRuntime).mockResolvedValue({
       availability: "online",
+      capacityStatus: "ready",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 1,
+      busyWorkerCount: 0,
+      idleWorkerCount: 1,
+      staleWorkerCount: 0,
       heartbeatAt: null,
       currentJobId: null,
       queueDepth: 0,
@@ -505,14 +521,93 @@ describe("同步任务定时计划页", () => {
     await screen.findByText(/已选择 0 个接口/);
     await user.click(screen.getByRole("button", { name: "全选当前结果" }));
     await user.type(screen.getByLabelText("批量每日执行时间"), "03:30");
-    await user.click(screen.getByRole("button", { name: "重新检查" }));
+    await user.click(screen.getByRole("button", { name: "重新检查配置" }));
     await screen.findByText("账号尚未验证或已停用，恢复有效状态后才能保存计划。");
-    await user.click(screen.getAllByRole("button", { name: "重新检查" })[0]);
+    await user.click(screen.getByRole("button", { name: "再次检查账号状态" }));
     expect(await screen.findByLabelText("批量每日执行时间")).toHaveValue("03:30");
     expect(screen.getByText(/已选择 1 个接口/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /保存 \d+ 个定时计划/ })).toBeEnabled();
     expect(api.getAccount).toHaveBeenCalledTimes(3);
     expect(api.listPolicies).toHaveBeenCalledTimes(3);
+  });
+
+  it("重新检查期间保留筛选、选择和时间，并阻止重复请求", async () => {
+    const accountRefresh = deferred<JijiaAccount>();
+    const policiesRefresh = deferred<ApiPolicy[]>();
+    const user = userEvent.setup();
+    renderSchedule();
+    await screen.findByText(/已选择 0 个接口/);
+    await user.type(screen.getByLabelText("搜索同步接口"), "流量");
+    await user.click(screen.getByRole("button", { name: "全选当前结果" }));
+    await user.type(screen.getByLabelText("批量每日执行时间"), "03:30");
+    vi.mocked(api.getAccount).mockReturnValue(accountRefresh.promise);
+    vi.mocked(api.listPolicies).mockReturnValue(policiesRefresh.promise);
+
+    await user.dblClick(screen.getByRole("button", { name: "重新检查配置" }));
+
+    expect(api.getAccount).toHaveBeenCalledTimes(2);
+    expect(api.listPolicies).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/正在刷新 · 上次检查/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "重新检查配置" })).toBeDisabled();
+    expect(screen.getByLabelText("搜索同步接口")).toHaveValue("流量");
+    expect(screen.getByText(/已选择 1 个接口/)).toBeInTheDocument();
+    expect(screen.getByLabelText("批量每日执行时间")).toHaveValue("03:30");
+
+    await act(async () => {
+      accountRefresh.resolve(account);
+      policiesRefresh.resolve([policy]);
+      await Promise.all([accountRefresh.promise, policiesRefresh.promise]);
+    });
+
+    expect(screen.getByText(/上次检查/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "重新检查配置" })).toBeEnabled();
+  });
+
+  it("重新检查部分失败时更新成功状态并保留旧配置", async () => {
+    const user = userEvent.setup();
+    renderSchedule();
+    await screen.findByText(/已选择 0 个接口/);
+    await user.click(screen.getByRole("button", { name: "全选当前结果" }));
+    await user.type(screen.getByLabelText("批量每日执行时间"), "03:30");
+    vi.mocked(api.getAccount).mockResolvedValue({ ...account, status: "inactive" });
+    vi.mocked(api.listPolicies).mockRejectedValue(
+      new ApiError("接口策略暂时不可用", 503, "UNAVAILABLE"),
+    );
+
+    await user.click(screen.getByRole("button", { name: "重新检查配置" }));
+
+    expect(
+      await screen.findByText("账号尚未验证或已停用，恢复有效状态后才能保存计划。"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("接口策略暂时不可用").closest(".ant-alert")).toHaveClass(
+      "ant-alert-warning",
+    );
+    expect(screen.getByText(/刷新失败 · 仍显示/)).toBeVisible();
+    expect(screen.getByText(/已选择 1 个接口/)).toBeInTheDocument();
+    expect(screen.getByLabelText("批量每日执行时间")).toHaveValue("03:30");
+    expect(screen.getByRole("button", { name: "重新检查配置" })).toBeEnabled();
+  });
+
+  it("重新检查后移除服务端已删除的选择并明确提示", async () => {
+    const inventoryPolicy = {
+      ...policy,
+      id: 21,
+      apiCode: "inventory_page",
+      name: "库存明细",
+    };
+    vi.mocked(api.listPolicies).mockResolvedValue([policy, inventoryPolicy]);
+    const user = userEvent.setup();
+    renderSchedule();
+    await screen.findByText("当前结果 2 / 共 2 · 已选 0");
+    await user.click(screen.getByRole("button", { name: "全选当前结果" }));
+    await user.type(screen.getByLabelText("批量每日执行时间"), "03:30");
+    vi.mocked(api.listPolicies).mockResolvedValue([policy]);
+
+    await user.click(screen.getByRole("button", { name: "重新检查配置" }));
+
+    expect(await screen.findByText("1 个已选接口已不可用，已从选择中移除。")).toBeVisible();
+    expect(screen.getByText(/已选择 1 个接口/)).toBeInTheDocument();
+    expect(screen.getByLabelText("批量每日执行时间")).toHaveValue("03:30");
   });
 
   it("保存未完成时历史导航切换账号会解除锁定并忽略旧结果", async () => {
@@ -542,6 +637,12 @@ describe("同步任务定时计划页", () => {
   it("执行服务离线仍允许保存计划并说明当前不可执行", async () => {
     vi.mocked(api.getWorkerRuntime).mockResolvedValue({
       availability: "offline",
+      capacityStatus: "offline",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 0,
+      busyWorkerCount: 0,
+      idleWorkerCount: 0,
+      staleWorkerCount: 0,
       heartbeatAt: null,
       currentJobId: null,
       queueDepth: 0,

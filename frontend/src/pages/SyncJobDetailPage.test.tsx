@@ -65,6 +65,12 @@ describe("同步任务详情", () => {
     });
     vi.mocked(api.getWorkerRuntime).mockResolvedValue({
       availability: "busy",
+      capacityStatus: "ready",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 1,
+      busyWorkerCount: 1,
+      idleWorkerCount: 0,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-08-27T08:00:00Z",
       currentJobId: 18,
       queueDepth: 1,
@@ -98,7 +104,7 @@ describe("同步任务详情", () => {
     await user.click(screen.getByText("查看技术信息"));
     expect(screen.getByText("2021-04-03")).toBeInTheDocument();
     expect(screen.getByText("2026-08-25")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("变更追赶进行中");
+    expect(screen.getByText("变更追赶进行中")).toBeInTheDocument();
     expect(screen.queryByLabelText(/扫描下限|起始日期|窗口天数/)).not.toBeInTheDocument();
   });
 
@@ -407,7 +413,7 @@ describe("同步任务详情", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("status")).toHaveTextContent("增量同步已追平");
+    expect(await screen.findByText("增量同步已追平")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "增量同步进度" })).toBeInTheDocument();
   });
 

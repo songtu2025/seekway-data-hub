@@ -7,6 +7,7 @@ import type { JijiaAccount, ParsedDataItem, ParsedDataset } from "../api/types";
 import { AppShell } from "../components/AppShell";
 import { CursorPagination } from "../components/CursorPagination";
 import { DataSyncPanel } from "../components/DataSyncPanel";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { useCursorPagination } from "../hooks/useCursorPagination";
 import { getApiErrorMessage } from "./m3Utils";
 
@@ -90,7 +91,11 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
   const [accounts, setAccounts] = useState<JijiaAccount[]>([]);
   const [items, setItems] = useState<ParsedDataItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [accountError, setAccountError] = useState("");
   const pagination = useCursorPagination(undefined, filterKey);
   const { pageSize, restorePagination, setNextCursor: updateNextCursor } = pagination;
@@ -101,8 +106,8 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
       requestId: number,
       requestAccountId: string,
       requestKeyword: string,
+      source: "initial" | "refresh" | "page",
     ) => {
-      setLoading(true);
       try {
         const result = await api.listParsedData(dataset, {
           cursor,
@@ -113,6 +118,9 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
         if (requestRef.current !== requestId) return;
         setItems(result.items);
         updateNextCursor(result.nextCursor ?? null);
+        setLastUpdatedAt(new Date());
+        setError("");
+        if (source === "refresh") setRefreshNotice(`${config.title}已刷新`);
       } catch (caught) {
         if (requestRef.current === requestId) {
           setError(getApiErrorMessage(caught, `${config.title}加载失败，请稍后重试`));
@@ -120,6 +128,8 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
       } finally {
         if (requestRef.current === requestId) {
           setLoading(false);
+          setRefreshing(false);
+          setLoadingPage(false);
         }
       }
     },
@@ -140,10 +150,12 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
     setAccountId(selectedAccountId);
     setKeyword(selectedKeyword);
     setItems([]);
+    setRefreshNotice("");
+    setLastUpdatedAt(null);
     const cursor = restorePagination();
     setLoading(true);
     setError("");
-    void load(cursor, requestId, selectedAccountId, selectedKeyword);
+    void load(cursor, requestId, selectedAccountId, selectedKeyword, "initial");
     return () => {
       if (requestRef.current === requestId) requestRef.current += 1;
     };
@@ -151,19 +163,19 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
 
   function refreshCurrentData() {
     const requestId = ++requestRef.current;
-    setItems([]);
     pagination.resetPagination();
-    setLoading(true);
+    setRefreshing(true);
+    setRefreshNotice("");
     setError("");
-    void load(undefined, requestId, selectedAccountId, selectedKeyword);
+    void load(undefined, requestId, selectedAccountId, selectedKeyword, "refresh");
   }
 
   function loadPage(cursor: string | undefined) {
     const requestId = ++requestRef.current;
-    setItems([]);
-    setLoading(true);
+    setLoadingPage(true);
+    setRefreshNotice("");
     setError("");
-    void load(cursor, requestId, selectedAccountId, selectedKeyword);
+    void load(cursor, requestId, selectedAccountId, selectedKeyword, "page");
   }
 
   const columns: TableColumnsType<ParsedDataItem> = config.columns.map((column, index) => ({
@@ -224,6 +236,7 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
           loadedCount={items.length}
           selectedAccountId={selectedAccountId}
           onSynced={refreshCurrentData}
+          preservePageOnSync={pagination.pageIndex > 0}
         />
         <form
           className="m3-filter parsed-data-filter"
@@ -233,7 +246,7 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
             if (accountId) next.set("jijiaAccountId", accountId);
             if (keyword.trim()) next.set("keyword", keyword.trim());
             if (accountId === selectedAccountId && keyword.trim() === selectedKeyword) {
-              if (!loading) refreshCurrentData();
+              if (!loading && !refreshing && !loadingPage) refreshCurrentData();
             } else {
               setSearchParams(next);
             }
@@ -276,25 +289,36 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
             role="alert"
             title={error || accountError}
             showIcon
-            type="error"
+            type={items.length > 0 ? "warning" : "error"}
           />
         ) : null}
         <section className="m3-card" aria-labelledby={`${dataset}-title`}>
           <div className="m3-card-heading">
             <h2 id={`${dataset}-title`}>当前数据</h2>
-            <span>
-              {loading
-                ? "正在查询"
-                : error
-                  ? "查询失败"
-                  : `第 ${pagination.pageIndex + 1} 页 · ${items.length} 条`}
-            </span>
+            <div>
+              <span>
+                {loading
+                  ? "正在查询"
+                  : loadingPage
+                    ? "正在切换页面"
+                    : `第 ${pagination.pageIndex + 1} 页 · ${items.length} 条`}
+              </span>
+              <RefreshStatus
+                failedWithPreviousData={Boolean(error && items.length)}
+                lastUpdatedAt={lastUpdatedAt}
+                manualRefreshMessage={refreshNotice}
+                refreshing={refreshing}
+              />
+            </div>
           </div>
           <Table<ParsedDataItem>
             aria-label={`${config.title}列表`}
             columns={columns}
             dataSource={items}
-            loading={{ spinning: loading, description: `正在加载${config.title}…` }}
+            loading={{
+              spinning: loading || loadingPage,
+              description: loading ? `正在加载${config.title}…` : "正在更新数据…",
+            }}
             locale={{
               emptyText:
                 loading || error ? null : (
@@ -321,7 +345,7 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
             controller={pagination}
             itemCount={items.length}
             loadPage={loadPage}
-            loading={loading}
+            loading={loading || refreshing || loadingPage}
           />
         </section>
       </main>

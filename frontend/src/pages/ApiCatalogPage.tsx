@@ -6,6 +6,7 @@ import { api } from "../api/client";
 import type { ApiCatalogItem, ApiPolicy, JijiaAccount, OfficialApiCatalogItem } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { businessDomainLabel } from "../businessDomains";
 import { buildPolicyUpdate } from "../policyUtils";
 import { ConnectedCatalogDetail, OfficialCatalogDetail } from "./ApiCatalogDetails";
@@ -66,6 +67,8 @@ export function ApiCatalogPage() {
   const [official, setOfficial] = useState<OfficialApiCatalogItem[]>([]);
   const [connectedLoading, setConnectedLoading] = useState(true);
   const [officialLoading, setOfficialLoading] = useState(true);
+  const [connectedLastCheckedAt, setConnectedLastCheckedAt] = useState<Date | null>(null);
+  const [officialLastCheckedAt, setOfficialLastCheckedAt] = useState<Date | null>(null);
   const [connectedError, setConnectedError] = useState("");
   const [officialError, setOfficialError] = useState("");
   const [policies, setPolicies] = useState<ApiPolicy[]>([]);
@@ -92,9 +95,17 @@ export function ApiCatalogPage() {
   const officialCacheRef = useRef(new Map<number, OfficialApiCatalogItem[]>());
   const officialRequestsRef = useRef(new Map<number, Promise<OfficialApiCatalogItem[]>>());
   const policyGenerationRef = useRef(0);
+  const connectedCatalogSuccessRef = useRef("");
+  const connectedPolicySuccessRef = useRef("");
   const policiesByCode = useMemo(
-    () => new Map(policies.map((policy) => [policy.apiCode, policy])),
-    [policies],
+    () =>
+      new Map(
+        (loadedPolicyAccountId === accountId ? policies : []).map((policy) => [
+          policy.apiCode,
+          policy,
+        ]),
+      ),
+    [accountId, loadedPolicyAccountId, policies],
   );
 
   function updateQuery(values: Record<string, string>, resetPage = false, replace = false) {
@@ -112,11 +123,20 @@ export function ApiCatalogPage() {
 
   function refreshCurrentView() {
     if (view === "official") {
-      setOfficialRefresh((value) => value + 1);
+      if (officialLoading) return;
+      setOfficialLoading(true);
+      setOfficialRefresh(officialRefresh + 1);
     } else {
-      setConnectedRefresh((value) => value + 1);
+      if (connectedLoading || policiesLoading) return;
+      setConnectedLoading(true);
+      if (accountId) setPoliciesLoading(true);
+      setConnectedRefresh(connectedRefresh + 1);
     }
   }
+
+  useEffect(() => {
+    setConnectedLastCheckedAt(null);
+  }, [accountId]);
 
   useEffect(() => {
     if (view !== "connected") return undefined;
@@ -128,6 +148,10 @@ export function ApiCatalogPage() {
       setLoadedAccountId(accountId);
       setConnectedError("");
       setConnectedLoading(false);
+      connectedCatalogSuccessRef.current = loadKey;
+      if (!accountId || connectedPolicySuccessRef.current === loadKey) {
+        setConnectedLastCheckedAt(new Date());
+      }
       return undefined;
     }
 
@@ -172,12 +196,17 @@ export function ApiCatalogPage() {
         setAccounts(accountsCacheRef.current ?? []);
         setConnected(connectedRows);
         setLoadedAccountId(accountId);
+        connectedCatalogSuccessRef.current = loadKey;
+        if (!accountId || connectedPolicySuccessRef.current === loadKey) {
+          setConnectedLastCheckedAt(new Date());
+        }
       })
       .catch((caught: unknown) => {
         if (active) setConnectedError(getApiErrorMessage(caught, "已接入接口加载失败"));
       })
       .finally(() => {
-        if (active) setConnectedLoading(false);
+        if (!active) return;
+        setConnectedLoading(false);
       });
     return () => {
       active = false;
@@ -185,12 +214,17 @@ export function ApiCatalogPage() {
   }, [accountId, connectedRefresh, view]);
 
   useEffect(() => {
-    const generation = ++policyGenerationRef.current;
     setPolicies([]);
     setLoadedPolicyAccountId(null);
     setPolicyLoadError("");
     setPolicyUpdateError("");
     setUpdatingPolicyCodes(new Set());
+  }, [accountId]);
+
+  useEffect(() => {
+    const generation = ++policyGenerationRef.current;
+    const loadKey = `${accountId}:${connectedRefresh}`;
+    setPolicyLoadError("");
     if (view !== "connected" || !accountId) {
       setPoliciesLoading(false);
       return undefined;
@@ -203,13 +237,18 @@ export function ApiCatalogPage() {
         if (policyGenerationRef.current !== generation) return;
         setPolicies(rows);
         setLoadedPolicyAccountId(accountId);
+        connectedPolicySuccessRef.current = loadKey;
+        if (connectedCatalogSuccessRef.current === loadKey) {
+          setConnectedLastCheckedAt(new Date());
+        }
       })
       .catch((caught: unknown) => {
         if (policyGenerationRef.current !== generation) return;
         setPolicyLoadError(getApiErrorMessage(caught, "账号接口策略加载失败"));
       })
       .finally(() => {
-        if (policyGenerationRef.current === generation) setPoliciesLoading(false);
+        if (policyGenerationRef.current !== generation) return;
+        setPoliciesLoading(false);
       });
     return undefined;
   }, [accountId, connectedRefresh, view]);
@@ -221,6 +260,7 @@ export function ApiCatalogPage() {
       setOfficial(cachedRows);
       setOfficialError("");
       setOfficialLoading(false);
+      setOfficialLastCheckedAt(new Date());
       return undefined;
     }
 
@@ -245,13 +285,15 @@ export function ApiCatalogPage() {
       .then((rows) => {
         if (active) {
           setOfficial(rows);
+          setOfficialLastCheckedAt(new Date());
         }
       })
       .catch((caught: unknown) => {
         if (active) setOfficialError(getApiErrorMessage(caught, "官方接口目录加载失败"));
       })
       .finally(() => {
-        if (active) setOfficialLoading(false);
+        if (!active) return;
+        setOfficialLoading(false);
       });
     return () => {
       active = false;
@@ -259,7 +301,8 @@ export function ApiCatalogPage() {
   }, [officialRefresh, view]);
 
   const keyword = search.trim().toLocaleLowerCase();
-  const visibleConnected = connected.filter(
+  const currentConnected = loadedAccountId === accountId ? connected : [];
+  const visibleConnected = currentConnected.filter(
     (item) =>
       (!keyword ||
         `${item.name} ${item.apiCode} ${item.path} ${item.domain} ${connectedDomain(item)} ${businessDomainLabel(connectedDomain(item))}`
@@ -277,20 +320,28 @@ export function ApiCatalogPage() {
       (!platform || item.systemConfigured === (platform === "enabled")),
   );
   const selectedConnected =
-    view === "connected" ? connected.find((item) => item.apiCode === query.get("api")) : undefined;
+    view === "connected"
+      ? currentConnected.find((item) => item.apiCode === query.get("api"))
+      : undefined;
   const selectedOfficial =
     view === "official"
       ? official.find((item) => String(item.docId ?? item.path) === query.get("doc"))
       : undefined;
   const domains = [
     ...new Set(
-      view === "connected" ? connected.map(connectedDomain) : official.map(officialDomain),
+      view === "connected" ? currentConnected.map(connectedDomain) : official.map(officialDomain),
     ),
   ].sort();
   const selected = selectedConnected ?? selectedOfficial;
   const hasFilters = Boolean(search || domain || platform || status);
   const total = view === "connected" ? visibleConnected.length : visibleOfficial.length;
   const currentPage = Math.min(page, Math.max(1, Math.ceil(total / pageSize)));
+  const lastCheckedAt = view === "official" ? officialLastCheckedAt : connectedLastCheckedAt;
+  const hasPreviousResult =
+    view === "official"
+      ? officialLastCheckedAt !== null
+      : loadedAccountId === accountId && connectedLastCheckedAt !== null;
+  const refreshing = loading && hasPreviousResult;
 
   function toggleBlockReason(item: ApiCatalogItem, policy?: ApiPolicy) {
     if (!canEdit) return "Viewer 仅可查看";
@@ -631,7 +682,17 @@ export function ApiCatalogPage() {
             >
               重置
             </Button>
-            <Button loading={loading} onClick={refreshCurrentView}>
+            <RefreshStatus
+              failedWithPreviousData={Boolean(error && hasPreviousResult)}
+              lastUpdatedAt={lastCheckedAt}
+              refreshing={refreshing}
+            />
+            <Button
+              aria-label="刷新"
+              disabled={loading || refreshing}
+              loading={refreshing}
+              onClick={refreshCurrentView}
+            >
               刷新
             </Button>
           </div>
@@ -651,7 +712,8 @@ export function ApiCatalogPage() {
                       {filter.label}{" "}
                       {needsAccount && !accountId
                         ? "—"
-                        : connected.filter((item) => matchesStatus(item, filter.value)).length}
+                        : currentConnected.filter((item) => matchesStatus(item, filter.value))
+                            .length}
                     </Button>
                   );
                 })}
@@ -682,32 +744,37 @@ export function ApiCatalogPage() {
               className="page-alert"
               showIcon
               title={error}
-              type="error"
-              action={<Button onClick={refreshCurrentView}>重试</Button>}
+              type={hasPreviousResult ? "warning" : "error"}
+              action={
+                hasPreviousResult ? undefined : <Button onClick={refreshCurrentView}>重试</Button>
+              }
             />
-          ) : view === "connected" ? (
-            <Table
-              size="middle"
-              rowKey="apiCode"
-              columns={connectedColumns}
-              dataSource={visibleConnected}
-              loading={loading}
-              locale={{ emptyText: empty }}
-              pagination={pagination}
-              scroll={{ x: 1095 }}
-            />
-          ) : (
-            <Table
-              size="middle"
-              rowKey={(item) => `${item.docId}-${item.path}`}
-              columns={officialColumns}
-              dataSource={visibleOfficial}
-              loading={loading}
-              locale={{ emptyText: empty }}
-              pagination={pagination}
-              scroll={{ x: 940 }}
-            />
-          )}
+          ) : null}
+          {!error || hasPreviousResult ? (
+            view === "connected" ? (
+              <Table
+                size="middle"
+                rowKey="apiCode"
+                columns={connectedColumns}
+                dataSource={visibleConnected}
+                loading={loading && !hasPreviousResult}
+                locale={{ emptyText: empty }}
+                pagination={pagination}
+                scroll={{ x: 1095 }}
+              />
+            ) : (
+              <Table
+                size="middle"
+                rowKey={(item) => `${item.docId}-${item.path}`}
+                columns={officialColumns}
+                dataSource={visibleOfficial}
+                loading={loading && !hasPreviousResult}
+                locale={{ emptyText: empty }}
+                pagination={pagination}
+                scroll={{ x: 940 }}
+              />
+            )
+          ) : null}
         </section>
         <Drawer
           rootClassName="catalog-drawer"
@@ -723,7 +790,9 @@ export function ApiCatalogPage() {
             }
           }}
           title={selected?.name ?? "接口详情"}
-          open={Boolean(selected) && !loading && !error}
+          open={
+            Boolean(selected) && (!loading || hasPreviousResult) && (!error || hasPreviousResult)
+          }
           onClose={() => updateQuery({ api: "", doc: "" }, false, true)}
           size={560}
           footer={

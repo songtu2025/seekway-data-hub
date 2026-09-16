@@ -7,6 +7,7 @@ import type { JijiaAccount, SaleReturnOrder } from "../api/types";
 import { AppShell } from "../components/AppShell";
 import { CursorPagination } from "../components/CursorPagination";
 import { DataSyncPanel } from "../components/DataSyncPanel";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { useCursorPagination } from "../hooks/useCursorPagination";
 import { getApiErrorMessage } from "./m3Utils";
 
@@ -52,7 +53,11 @@ export function SaleReturnOrdersPage() {
   const [orders, setOrders] = useState<SaleReturnOrder[]>([]);
   const [accounts, setAccounts] = useState<JijiaAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [accountError, setAccountError] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<SaleReturnOrder | null>(null);
   const hasActiveFilters = Object.values(selectedFilters).some(Boolean);
@@ -74,8 +79,8 @@ export function SaleReturnOrdersPage() {
       generation: number,
       requestFilterKey: string,
       requestFilters: ReturnFilters,
+      source: "initial" | "refresh" | "page",
     ) => {
-      setLoading(true);
       setError("");
       try {
         const result = await api.listSaleReturnOrders({
@@ -100,6 +105,8 @@ export function SaleReturnOrdersPage() {
           return;
         setOrders(result.items);
         updateNextCursor(result.nextCursor ?? null);
+        setLastUpdatedAt(new Date());
+        if (source === "refresh") setRefreshNotice("退货订单已刷新");
       } catch (caught) {
         if (
           requestGenerationRef.current === generation &&
@@ -110,8 +117,11 @@ export function SaleReturnOrdersPage() {
         if (
           requestGenerationRef.current === generation &&
           activeFilterKeyRef.current === requestFilterKey
-        )
+        ) {
           setLoading(false);
+          setRefreshing(false);
+          setLoadingPage(false);
+        }
       }
     },
     [pageSize, updateNextCursor],
@@ -122,11 +132,13 @@ export function SaleReturnOrdersPage() {
     activeFilterKeyRef.current = filterKey;
     setFilters(selectedFilters);
     setOrders([]);
+    setRefreshNotice("");
+    setLastUpdatedAt(null);
     const cursor = restorePagination();
     setLoading(true);
     setError("");
     setSelectedOrder(null);
-    void loadOrders(cursor, generation, filterKey, selectedFilters);
+    void loadOrders(cursor, generation, filterKey, selectedFilters, "initial");
     return () => {
       if (requestGenerationRef.current === generation) requestGenerationRef.current += 1;
     };
@@ -150,7 +162,7 @@ export function SaleReturnOrdersPage() {
       Object.values(selectedFilters).filter(Boolean).length === Object.keys(nextParams).length &&
       Object.entries(nextParams).every(([key, value]) => searchParams.get(key) === value)
     ) {
-      if (!loading) refreshCurrentData();
+      if (!loading && !refreshing && !loadingPage) refreshCurrentData();
     } else {
       setSearchParams(nextParams);
     }
@@ -163,22 +175,22 @@ export function SaleReturnOrdersPage() {
   function refreshCurrentData() {
     const generation = ++requestGenerationRef.current;
     activeFilterKeyRef.current = filterKey;
-    setOrders([]);
     pagination.resetPagination();
-    setLoading(true);
+    setRefreshing(true);
+    setRefreshNotice("");
     setError("");
     setSelectedOrder(null);
-    void loadOrders(undefined, generation, filterKey, selectedFilters);
+    void loadOrders(undefined, generation, filterKey, selectedFilters, "refresh");
   }
 
   function loadPage(cursor: string | undefined) {
     const generation = ++requestGenerationRef.current;
     activeFilterKeyRef.current = filterKey;
-    setOrders([]);
-    setLoading(true);
+    setLoadingPage(true);
+    setRefreshNotice("");
     setError("");
     setSelectedOrder(null);
-    void loadOrders(cursor, generation, filterKey, selectedFilters);
+    void loadOrders(cursor, generation, filterKey, selectedFilters, "page");
   }
 
   const columns: TableColumnsType<SaleReturnOrder> = [
@@ -260,6 +272,7 @@ export function SaleReturnOrdersPage() {
           loadedCount={orders.length}
           selectedAccountId={selectedFilters.accountId}
           onSynced={refreshCurrentData}
+          preservePageOnSync={pagination.pageIndex > 0}
         />
         <form className="m3-filter sale-return-filter" onSubmit={submit}>
           <label htmlFor="return-account">
@@ -399,26 +412,37 @@ export function SaleReturnOrdersPage() {
             role="alert"
             title={error || accountError}
             showIcon
-            type="error"
+            type={orders.length > 0 ? "warning" : "error"}
           />
         ) : null}
         <section className="m3-card" aria-labelledby="sale-return-title">
           <div className="m3-card-heading">
             <h2 id="sale-return-title">当前记录</h2>
-            <span>
-              {loading
-                ? "正在查询"
-                : error
-                  ? "查询失败"
-                  : `第 ${pagination.pageIndex + 1} 页 · ${orders.length} 条`}
-              {hasActiveFilters ? " · 已应用筛选" : ""}
-            </span>
+            <div>
+              <span>
+                {loading
+                  ? "正在查询"
+                  : loadingPage
+                    ? "正在切换页面"
+                    : `第 ${pagination.pageIndex + 1} 页 · ${orders.length} 条`}
+                {hasActiveFilters ? " · 已应用筛选" : ""}
+              </span>
+              <RefreshStatus
+                failedWithPreviousData={Boolean(error && orders.length)}
+                lastUpdatedAt={lastUpdatedAt}
+                manualRefreshMessage={refreshNotice}
+                refreshing={refreshing}
+              />
+            </div>
           </div>
           <Table<SaleReturnOrder>
             aria-label="退货订单当前记录列表"
             columns={columns}
             dataSource={orders}
-            loading={{ spinning: loading, description: "正在加载退货订单…" }}
+            loading={{
+              spinning: loading || loadingPage,
+              description: loading ? "正在加载退货订单…" : "正在更新数据…",
+            }}
             locale={{
               emptyText:
                 loading || error ? null : (
@@ -447,7 +471,7 @@ export function SaleReturnOrdersPage() {
             controller={pagination}
             itemCount={orders.length}
             loadPage={loadPage}
-            loading={loading}
+            loading={loading || refreshing || loadingPage}
           />
         </section>
         {selectedOrder ? (

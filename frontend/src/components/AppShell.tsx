@@ -70,7 +70,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   const { runtime: workerRuntime } = useWorkerRuntime({
     refreshKey: location.pathname,
-    retainLastResultOnError: false,
   });
   const inSyncSection =
     location.pathname.startsWith("/jobs") || location.pathname.startsWith("/runs");

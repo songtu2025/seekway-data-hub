@@ -80,6 +80,7 @@ type MemberWorkspaceState = {
   protectsLastAdmin: boolean;
   selectedRole: UserRole;
   selectedUser: User | null;
+  writeDisabled: boolean;
 };
 
 type MemberWorkspaceActions = {
@@ -104,6 +105,7 @@ export function MemberWorkspace({
     searchActive,
     selectedRole,
     selectedUser,
+    writeDisabled,
   } = state;
 
   return (
@@ -186,7 +188,7 @@ export function MemberWorkspace({
               <div>
                 <Select
                   aria-label="当前角色"
-                  disabled={protectsLastAdmin || busy}
+                  disabled={protectsLastAdmin || busy || writeDisabled}
                   id="member-role"
                   options={[
                     { label: "管理员", value: "admin" },
@@ -197,7 +199,9 @@ export function MemberWorkspace({
                   onChange={actions.changeRole}
                 />
                 <Button
-                  disabled={busy || protectsLastAdmin || selectedRole === selectedUser.role}
+                  disabled={
+                    busy || writeDisabled || protectsLastAdmin || selectedRole === selectedUser.role
+                  }
                   loading={busy}
                   type="primary"
                   onClick={actions.saveRole}
@@ -218,7 +222,7 @@ export function MemberWorkspace({
               </span>
               <Button
                 danger={selectedUser.status !== "disabled"}
-                disabled={busy || protectsLastAdmin}
+                disabled={busy || writeDisabled || protectsLastAdmin}
                 loading={busy}
                 onClick={actions.toggleStatus}
               >
@@ -243,6 +247,7 @@ type InvitationWorkspaceState = {
   loading: boolean;
   searchActive: boolean;
   selectedInvitationRow: InvitationRow | null;
+  writeDisabled: boolean;
 };
 
 type InvitationWorkspaceActions = {
@@ -258,7 +263,8 @@ export function InvitationWorkspace({
   actions: InvitationWorkspaceActions;
   state: InvitationWorkspaceState;
 }) {
-  const { busy, filteredInvitations, loading, searchActive, selectedInvitationRow } = state;
+  const { busy, filteredInvitations, loading, searchActive, selectedInvitationRow, writeDisabled } =
+    state;
 
   return (
     <section
@@ -341,7 +347,7 @@ export function InvitationWorkspace({
             <div className="invitation-actions">
               {canResendInvitation(selectedInvitationRow.status) ? (
                 <Button
-                  disabled={busy}
+                  disabled={busy || writeDisabled}
                   loading={busy}
                   onClick={() => actions.resend(selectedInvitationRow.invitation)}
                 >
@@ -351,7 +357,7 @@ export function InvitationWorkspace({
               {canRevokeInvitation(selectedInvitationRow.status) ? (
                 <Button
                   danger
-                  disabled={busy}
+                  disabled={busy || writeDisabled}
                   onClick={() => actions.revoke(selectedInvitationRow.invitation)}
                 >
                   撤销邀请

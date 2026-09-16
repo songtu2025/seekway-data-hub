@@ -293,6 +293,13 @@ a:focus-visible {
   width: 140px;
   margin-top: 10px;
 }
+.member-heading-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.member-heading-actions .invite-button {
+  margin-top: 0;
+}
 .member-toolbar {
   display: flex;
   height: 52px;
@@ -2320,6 +2327,16 @@ a:focus-visible {
   min-width: 0;
   gap: 14px;
 }
+.scheduled-plan-refresh-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.scheduled-plan-refresh-bar .scheduled-plan-current-account {
+  flex: 1 1 280px;
+}
 .scheduled-plan-workspace,
 .scheduled-plan-execution-column {
   display: grid;
@@ -2511,6 +2528,13 @@ a:focus-visible {
 }
 .worker-status--busy strong {
   color: var(--color-info);
+}
+.worker-status--degraded {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-subtle);
+}
+.worker-status--degraded strong {
+  color: var(--color-warning-text);
 }
 .worker-status--offline {
   border-color: var(--color-danger-border);
@@ -2777,6 +2801,14 @@ a:focus-visible {
   color: var(--color-success);
 }
 .m3-refresh-controls > .m3-refresh-warning {
+  color: var(--color-warning-text);
+}
+.m3-refresh-status {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.m3-refresh-status.is-warning {
   color: var(--color-warning-text);
 }
 .responsive-table-wrap {
@@ -3841,6 +3873,12 @@ a:focus-visible {
 }
 .catalog-row-actions .ant-btn {
   padding: 0;
+}
+.catalog-row-actions > .muted-copy {
+  display: inline-flex;
+  min-height: 24px;
+  margin: 0;
+  align-items: center;
 }
 .catalog-table-panel .ant-btn-link,
 .catalog-row-link {

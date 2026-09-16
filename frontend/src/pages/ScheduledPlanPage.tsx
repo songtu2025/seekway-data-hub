@@ -43,7 +43,7 @@ export function ScheduledPlanPage() {
   const [accounts, setAccounts] = useState<JijiaAccount[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountsError, setAccountsError] = useState("");
-  const [reload, setReload] = useState(0);
+  const [accountReload, setAccountReload] = useState(0);
   const [pendingAccount, setPendingAccount] = useState<number | null>(null);
   const dirtyRef = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -83,7 +83,7 @@ export function ScheduledPlanPage() {
     return () => {
       current = false;
     };
-  }, [targetApiCode, canEdit, reload, accountId, setQuery, location.state]);
+  }, [targetApiCode, canEdit, accountReload, accountId, setQuery, location.state]);
 
   function changeAccount(value: number) {
     dirtyRef.current = false;
@@ -147,9 +147,6 @@ export function ScheduledPlanPage() {
                       }
                     />
                   </label>
-                  <Button disabled={busy} onClick={() => setReload((value) => value + 1)}>
-                    重新检查
-                  </Button>
                 </div>
               ) : null}
               {accountsError && !targetApiCode ? (
@@ -157,7 +154,7 @@ export function ScheduledPlanPage() {
                   type="error"
                   title={accountsError}
                   action={
-                    <Button disabled={busy} onClick={() => setReload((value) => value + 1)}>
+                    <Button disabled={busy} onClick={() => setAccountReload((value) => value + 1)}>
                       重试
                     </Button>
                   }
@@ -182,7 +179,6 @@ export function ScheduledPlanPage() {
               <ScheduledPlanForm
                 key={`${accountId}-${targetApiCode ?? "new"}`}
                 accountId={accountId}
-                refreshToken={reload}
                 apiCode={targetApiCode}
                 canEdit={canEdit}
                 csrfToken={csrfToken}

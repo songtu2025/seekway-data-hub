@@ -6,6 +6,8 @@ import { api } from "../api/client";
 import type { DashboardSummary } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
+import { useVisiblePolling } from "../hooks/useVisiblePolling";
 import { changeCatchupLabel, formatDate, getApiErrorMessage, statusLabel } from "./m3Utils";
 
 type InboxView = "attention" | "active" | "all";
@@ -39,52 +41,67 @@ export function DashboardPage() {
   const { user } = useAuth();
   const canManage = user?.role === "admin" || user?.role === "operator";
   const requestSequenceRef = useRef(0);
+  const inFlightRequestRef = useRef<number | null>(null);
+  const summaryRef = useRef<DashboardSummary | null>(null);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [inboxView, setInboxView] = useState<InboxView>("attention");
   const [itemType, setItemType] = useState<InboxItemType>("all");
 
-  const loadSummary = useCallback(async () => {
+  const loadSummary = useCallback(async (source: "initial" | "manual" | "auto" = "manual") => {
+    if (inFlightRequestRef.current !== null) return;
     const requestSequence = ++requestSequenceRef.current;
+    inFlightRequestRef.current = requestSequence;
+    if (source === "manual" && summaryRef.current) {
+      setRefreshing(true);
+      setRefreshNotice("");
+    }
+    if (source === "auto") setRefreshNotice("");
     try {
       const nextSummary = await api.getDashboard();
       if (requestSequenceRef.current !== requestSequence) return;
+      summaryRef.current = nextSummary;
       setSummary(nextSummary);
       sessionStorage.setItem("dashboard-runtime-status", JSON.stringify(nextSummary));
       setLastUpdatedAt(new Date());
       setError("");
+      if (source === "manual") setRefreshNotice("概览已刷新");
+      if (source === "auto") setRefreshNotice("");
     } catch (caught) {
       if (requestSequenceRef.current !== requestSequence) return;
-      setError(getApiErrorMessage(caught, "概览加载失败，请稍后重试"));
+      setError(
+        getApiErrorMessage(
+          caught,
+          summaryRef.current ? "刷新失败，当前为上次结果" : "概览加载失败，请稍后重试",
+        ),
+      );
     } finally {
-      if (requestSequenceRef.current === requestSequence) setLoading(false);
+      if (requestSequenceRef.current === requestSequence) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+      if (inFlightRequestRef.current === requestSequence) inFlightRequestRef.current = null;
     }
   }, []);
 
   useEffect(() => {
-    void loadSummary();
+    void loadSummary("initial");
     return () => {
       requestSequenceRef.current += 1;
+      inFlightRequestRef.current = null;
     };
   }, [loadSummary]);
 
   const hasActiveJobs = (summary?.queuedJobs ?? 0) > 0 || (summary?.runningJobs ?? 0) > 0;
-  useEffect(() => {
-    if (!hasActiveJobs) return undefined;
-    let active = true;
-    let timer: number | undefined;
-    const poll = async () => {
-      await loadSummary();
-      if (active) timer = window.setTimeout(() => void poll(), 3000);
-    };
-    timer = window.setTimeout(() => void poll(), 3000);
-    return () => {
-      active = false;
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [hasActiveJobs, loadSummary]);
+  useVisiblePolling({
+    enabled: hasActiveJobs,
+    intervalMs: 3000,
+    onPoll: () => loadSummary("auto"),
+  });
 
   const progress = summary?.historyProgress;
   const accounts = summary?.accounts ?? { total: 0, active: 0, attention: 0, inactive: 0 };
@@ -195,13 +212,19 @@ export function DashboardPage() {
         <header className="dashboard-inbox-header">
           <h1>运营收件箱</h1>
           <div className="dashboard-inbox-meta">
-            <span>最后刷新 {lastUpdatedAt ? formatClock(lastUpdatedAt) : "--:--:--"}</span>
+            <RefreshStatus
+              failedWithPreviousData={Boolean(error && summary)}
+              lastUpdatedAt={lastUpdatedAt}
+              manualRefreshMessage={refreshNotice}
+              refreshing={refreshing}
+            />
             <Button
               aria-label="刷新"
               className="dashboard-refresh"
-              loading={loading}
+              disabled={loading || refreshing}
+              loading={loading || refreshing}
               type="text"
-              onClick={() => void loadSummary()}
+              onClick={() => void loadSummary("manual")}
             >
               刷新
             </Button>
@@ -210,13 +233,13 @@ export function DashboardPage() {
             </time>
           </div>
         </header>
-        {error ? <Alert title={error} type="error" /> : null}
+        {error ? <Alert title={error} type={summary ? "warning" : "error"} /> : null}
         {loading ? (
           <div className="empty-state">
             <Spin /> 正在加载同步概览…
           </div>
         ) : null}
-        {!loading && summary ? (
+        {summary ? (
           <>
             <section className="dashboard-metrics" aria-label="同步运营指标">
               <Link to="/accounts">

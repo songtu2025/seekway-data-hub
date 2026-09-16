@@ -244,15 +244,13 @@ describe("同步运行记录", () => {
     });
   });
 
-  it("旧刷新成功和 finally 不能覆盖仍在等待的新刷新", async () => {
-    const oldRefresh = deferred<SyncRunListResponse>();
-    const newRefresh = deferred<SyncRunListResponse>();
+  it("刷新进行中阻止重复请求并保留旧记录", async () => {
+    const refresh = deferred<SyncRunListResponse>();
     vi.mocked(api.listSyncRuns)
       .mockResolvedValueOnce({
         items: [{ id: 1, batchNo: "BATCH-BASE", status: "success" }],
       })
-      .mockReturnValueOnce(oldRefresh.promise)
-      .mockReturnValueOnce(newRefresh.promise);
+      .mockReturnValueOnce(refresh.promise);
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -262,25 +260,20 @@ describe("同步运行记录", () => {
 
     await screen.findByRole("link", { name: "BATCH-BASE" });
     await user.click(screen.getByRole("button", { name: "刷新" }));
-    await user.click(screen.getByRole("button", { name: "刷新" }));
-    await waitFor(() => expect(api.listSyncRuns).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(api.listSyncRuns).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("link", { name: "BATCH-BASE" })).toBeInTheDocument();
+    expect(screen.getByText(/正在刷新 · 上次检查/)).toBeVisible();
+    expect(document.querySelector(".ant-table-wrapper .ant-spin-spinning")).toBeNull();
+    expect(screen.getByRole("button", { name: "正在刷新" })).toBeDisabled();
 
     await act(async () => {
-      oldRefresh.resolve({
-        items: [{ id: 2, batchNo: "BATCH-OLD", status: "failed" }],
-      });
-      await oldRefresh.promise;
-    });
-    expect(screen.queryByRole("link", { name: "BATCH-OLD" })).not.toBeInTheDocument();
-    expect(screen.getByText("正在加载运行记录…")).toBeInTheDocument();
-
-    await act(async () => {
-      newRefresh.resolve({
+      refresh.resolve({
         items: [{ id: 3, batchNo: "BATCH-NEW", status: "success" }],
       });
-      await newRefresh.promise;
+      await refresh.promise;
     });
     expect(screen.getByRole("link", { name: "BATCH-NEW" })).toBeInTheDocument();
+    expect(screen.getByText(/上次检查 \d{2}:\d{2}:\d{2}/)).toBeVisible();
   });
 
   it("旧下一页失败不能污染仍在等待的新筛选", async () => {
@@ -361,6 +354,83 @@ describe("同步运行记录", () => {
     expect(api.getSyncRun).toHaveBeenCalledWith("7");
     expect(api.listSyncRunLogs).toHaveBeenCalledWith("7");
     expect(api.listFailedRequests).toHaveBeenCalledWith("7");
+  });
+
+  it("刷新运行详情保留已加载内容、阻止重复请求并在部分失败时显示 warning", async () => {
+    const runRefresh = deferred<SyncRun>();
+    const logsRefresh = deferred<SyncRunLogListResponse>();
+    const failedRefresh = deferred<FailedRequestListResponse>();
+    vi.mocked(api.listSyncRunLogs)
+      .mockResolvedValueOnce({
+        items: [{ id: 1, apiCode: "api_a", status: "success", message: "日志首页" }],
+        nextCursor: "logs-next",
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 2, apiCode: "api_b", status: "success", message: "日志第二页" }],
+      })
+      .mockReturnValueOnce(logsRefresh.promise);
+    vi.mocked(api.listFailedRequests)
+      .mockResolvedValueOnce({
+        items: [{ id: 3, apiCode: "api_a", errorCode: "FIRST" }],
+        nextCursor: "failed-next",
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 4, apiCode: "api_b", errorCode: "SECOND" }],
+      })
+      .mockReturnValueOnce(failedRefresh.promise);
+    vi.mocked(api.getSyncRun).mockResolvedValueOnce({
+      id: 7,
+      batchNo: "BATCH-7",
+      jijiaAccountId: 8,
+      status: "partial_failed",
+    });
+    vi.mocked(api.getSyncRun).mockReturnValueOnce(runRefresh.promise);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/runs/7"]}>
+        <Routes>
+          <Route path="/runs/:id" element={<SyncRunDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("日志首页");
+    await user.click(screen.getByRole("button", { name: "加载更多日志" }));
+    await screen.findByText("日志第二页");
+    await user.click(screen.getByRole("button", { name: "加载更多失败请求" }));
+    await screen.findByText("SECOND");
+    expect(screen.getByText(/上次检查 \d{2}:\d{2}:\d{2}/)).toBeVisible();
+
+    await user.dblClick(screen.getByRole("button", { name: "刷新运行详情" }));
+    await waitFor(() => {
+      expect(api.getSyncRun).toHaveBeenCalledTimes(2);
+      expect(api.listSyncRunLogs).toHaveBeenCalledTimes(3);
+      expect(api.listFailedRequests).toHaveBeenCalledTimes(3);
+    });
+    expect(screen.getByText("日志第二页")).toBeInTheDocument();
+    expect(screen.getByText("SECOND")).toBeInTheDocument();
+    expect(screen.getByText(/正在刷新 · 上次检查/)).toBeVisible();
+
+    await act(async () => {
+      runRefresh.resolve({
+        id: 7,
+        batchNo: "BATCH-7",
+        jijiaAccountId: 8,
+        status: "partial_failed",
+      });
+      logsRefresh.resolve({
+        items: [
+          { id: 1, apiCode: "api_a", status: "success", message: "日志首页" },
+          { id: 2, apiCode: "api_b", status: "success", message: "日志第二页" },
+        ],
+      });
+      failedRefresh.reject(new Error("offline"));
+      await failedRefresh.promise.catch(() => undefined);
+    });
+    expect(screen.getByText("日志第二页")).toBeInTheDocument();
+    expect(screen.getByText("SECOND")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getByText(/刷新失败 · 仍显示 .* 的结果/)).toBeVisible();
   });
 
   it("从筛选后的运行列表进入时保留返回位置", async () => {

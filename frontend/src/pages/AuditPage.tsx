@@ -15,6 +15,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { api } from "../api/client";
 import type { AuditLog, JijiaAccount } from "../api/types";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { formatDate, getApiErrorMessage, timeZoneNote } from "./m3Utils";
 
 interface AuditFilters {
@@ -93,6 +94,7 @@ export function AuditPage() {
     { filterKey: string; count: number } | undefined;
   const restoredAuditRef = useRef(savedAudit);
   const requestSequenceRef = useRef(0);
+  const manualRefreshInFlightRef = useRef(false);
   const [filters, setFilters] = useState(selectedFilters);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [accounts, setAccounts] = useState<JijiaAccount[]>([]);
@@ -102,6 +104,8 @@ export function AuditPage() {
   const [error, setError] = useState("");
   const [accountError, setAccountError] = useState("");
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [loadedFilterKey, setLoadedFilterKey] = useState("");
   function resourceState(log: AuditLog) {
     return {
       from: `${location.pathname}${location.search}#audit-log-${log.id}`,
@@ -187,6 +191,10 @@ export function AuditPage() {
         if (requestSequenceRef.current !== requestSequence) return;
         setLogs((current) => (cursor ? [...current, ...result.items] : result.items));
         setNextCursor(result.nextCursor ?? null);
+        if (!cursor) {
+          setLastCheckedAt(new Date());
+          setLoadedFilterKey(JSON.stringify(requestFilters));
+        }
       } catch (caught) {
         if (requestSequenceRef.current !== requestSequence) return;
         setError(getApiErrorMessage(caught, "审计日志加载失败，请稍后重试"));
@@ -207,6 +215,8 @@ export function AuditPage() {
     setFilters(selectedFilters);
     setLogs([]);
     setNextCursor(null);
+    setLoadedFilterKey("");
+    manualRefreshInFlightRef.current = false;
     const restoredAudit = restoredAuditRef.current;
     const targetCount = restoredAudit?.filterKey === filterKey ? restoredAudit.count : 0;
     void loadLogs(undefined, selectedFilters, targetCount);
@@ -230,14 +240,18 @@ export function AuditPage() {
       Object.values(selectedFilters).filter(Boolean).length === Object.keys(next).length &&
       Object.entries(next).every(([key, value]) => searchParams.get(key) === value)
     ) {
-      if (!loading) {
-        setLogs([]);
-        setNextCursor(null);
-        void loadLogs(undefined, selectedFilters);
-      }
+      refreshLogs();
     } else {
       setSearchParams(next);
     }
+  }
+
+  function refreshLogs() {
+    if (loading || loadingMore || manualRefreshInFlightRef.current) return;
+    manualRefreshInFlightRef.current = true;
+    void loadLogs(undefined, selectedFilters, logs.length).finally(() => {
+      manualRefreshInFlightRef.current = false;
+    });
   }
 
   function updateFilter(name: keyof AuditFilters, value: string) {
@@ -306,6 +320,8 @@ export function AuditPage() {
       ),
     },
   ];
+  const hasPreviousResult = loadedFilterKey === filterKey && lastCheckedAt !== null;
+  const refreshing = loading && hasPreviousResult;
 
   return (
     <AppShell>
@@ -321,7 +337,7 @@ export function AuditPage() {
             role="alert"
             title={error || accountError}
             showIcon
-            type="error"
+            type={error && hasPreviousResult ? "warning" : "error"}
           />
         ) : null}
         <form className="m3-filter audit-filter" aria-label="审计日志筛选" onSubmit={submit}>
@@ -430,15 +446,37 @@ export function AuditPage() {
         <section className="m3-card">
           <div className="m3-card-heading">
             <h2>操作记录</h2>
-            <span>
-              {loading ? "正在查询" : error ? "查询失败" : `已加载 ${logs.length} 条`}
-              {hasActiveFilters ? " · 已应用筛选" : ""}
-            </span>
+            <div className="m3-refresh-controls">
+              <span>
+                {hasPreviousResult || !loading
+                  ? `已加载 ${logs.length} 条`
+                  : error
+                    ? "查询失败"
+                    : "正在查询"}
+                {hasActiveFilters ? " · 已应用筛选" : ""}
+              </span>
+              <RefreshStatus
+                failedWithPreviousData={Boolean(error && hasPreviousResult)}
+                lastUpdatedAt={hasPreviousResult ? lastCheckedAt : null}
+                refreshing={refreshing}
+              />
+              <Button
+                aria-label="刷新审计日志"
+                disabled={loading || loadingMore}
+                loading={refreshing}
+                onClick={refreshLogs}
+              >
+                刷新审计日志
+              </Button>
+            </div>
           </div>
           <Table<AuditLog>
             columns={columns}
             dataSource={logs}
-            loading={{ spinning: loading, description: "正在加载审计日志…" }}
+            loading={{
+              spinning: loading && !hasPreviousResult,
+              description: "正在加载审计日志…",
+            }}
             locale={{
               emptyText:
                 loading || error ? null : (
@@ -458,6 +496,7 @@ export function AuditPage() {
           {nextCursor ? (
             <div className="load-more-row">
               <Button
+                disabled={loading}
                 loading={loadingMore}
                 onClick={() => void loadLogs(nextCursor, selectedFilters)}
               >

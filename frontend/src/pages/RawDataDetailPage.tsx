@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Empty, Input, Select, Spin, Table, type TableColumnsType } from "antd";
 import { Link, useLocation, useParams } from "react-router-dom";
 
@@ -6,6 +6,7 @@ import { api } from "../api/client";
 import type { RawDataDetail, RawDataVersion } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { SourceBackLink } from "../components/SourceBackLink";
 import { browserTimeZone, formatDate, getApiErrorMessage } from "./m3Utils";
 
@@ -22,6 +23,28 @@ function flattenJson(value: unknown, path = "$", result: Record<string, string> 
   return result;
 }
 
+async function fetchVersionHistory(
+  recordId: string,
+  targetCount: number,
+  requiredVersionIds: string[],
+) {
+  const firstPage = await api.listRawDataVersions(recordId);
+  const result = {
+    items: [...firstPage.items],
+    nextCursor: firstPage.nextCursor ?? null,
+  };
+  const containsRequiredVersions = () => {
+    const loadedIds = new Set(result.items.map((version) => String(version.id)));
+    return requiredVersionIds.every((versionId) => loadedIds.has(versionId));
+  };
+  while (result.nextCursor && (result.items.length < targetCount || !containsRequiredVersions())) {
+    const nextPage = await api.listRawDataVersions(recordId, result.nextCursor);
+    result.items.push(...nextPage.items);
+    result.nextCursor = nextPage.nextCursor ?? null;
+  }
+  return result;
+}
+
 export function RawDataDetailPage() {
   const { id } = useParams();
   const location = useLocation();
@@ -32,6 +55,8 @@ export function RawDataDetailPage() {
   const [loading, setLoading] = useState(true);
   const [versionsLoading, setVersionsLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const [error, setError] = useState("");
   const [versionsError, setVersionsError] = useState("");
   const [jsonSearch, setJsonSearch] = useState("");
@@ -40,6 +65,7 @@ export function RawDataDetailPage() {
   const [compareRight, setCompareRight] = useState("");
   const [stateId, setStateId] = useState(id);
   const requestGenerationRef = useRef(0);
+  const inFlightGenerationRef = useRef<number | null>(null);
   const canViewRaw = user?.role === "admin" || user?.role === "operator";
   const stateMatchesRoute = stateId === id;
   const currentData = stateMatchesRoute && data && String(data.id) === id ? data : null;
@@ -52,6 +78,9 @@ export function RawDataDetailPage() {
   const currentVersionsError = stateMatchesRoute ? versionsError : "";
   const pageLoading = !stateMatchesRoute || loading || (data !== null && currentData === null);
   const currentVersionsLoading = !stateMatchesRoute || versionsLoading;
+  const comparedVersionIds = [compareLeft, compareRight].filter(
+    (versionId) => versionId && versionId !== "current",
+  );
   const verificationTaskId = new URLSearchParams(location.search).get("taskId") ?? "";
   const verificationRunId = new URLSearchParams(location.search).get("runId") ?? "";
   const verificationBatchNo = new URLSearchParams(location.search).get("observedBatchNo") ?? "";
@@ -91,9 +120,93 @@ export function RawDataDetailPage() {
       .map((path) => ({ path, left: left[path] ?? "—", right: right[path] ?? "—" }));
   }, [compareLeft, compareRight, currentData?.rawJson, currentVersions]);
 
+  const requestDetail = useCallback(
+    async (recordId: string, generation: number, source: "initial" | "manual") => {
+      try {
+        const detail = await api.getRawData(recordId);
+        if (requestGenerationRef.current !== generation) return false;
+        setData(detail);
+        return true;
+      } catch (caught: unknown) {
+        if (requestGenerationRef.current === generation) {
+          setError(getApiErrorMessage(caught, "原始数据详情加载失败，请稍后重试"));
+        }
+        return false;
+      } finally {
+        if (source === "initial" && requestGenerationRef.current === generation) {
+          setLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const requestVersions = useCallback(
+    async (
+      recordId: string,
+      generation: number,
+      source: "initial" | "manual",
+      targetCount: number,
+      requiredVersionIds: string[],
+    ) => {
+      try {
+        const history = await fetchVersionHistory(recordId, targetCount, requiredVersionIds);
+        if (requestGenerationRef.current !== generation) return false;
+        const availableVersions = new Set(history.items.map((version) => String(version.id)));
+        setVersions(history.items);
+        setNextCursor(history.nextCursor);
+        setCompareLeft((current) =>
+          current === "current" || availableVersions.has(current) ? current : "current",
+        );
+        setCompareRight((current) => (!current || availableVersions.has(current) ? current : ""));
+        return true;
+      } catch (caught: unknown) {
+        if (requestGenerationRef.current === generation) {
+          setVersionsError(getApiErrorMessage(caught, "版本历史加载失败，请稍后重试"));
+        }
+        return false;
+      } finally {
+        if (source === "initial" && requestGenerationRef.current === generation) {
+          setVersionsLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const loadData = useCallback(
+    async (
+      source: "initial" | "manual",
+      targetVersionCount = 0,
+      requiredVersionIds: string[] = [],
+    ) => {
+      if (!id || inFlightGenerationRef.current !== null) return;
+      const generation = ++requestGenerationRef.current;
+      inFlightGenerationRef.current = generation;
+      if (source === "initial") {
+        setLoading(true);
+        setVersionsLoading(true);
+      } else {
+        setRefreshing(true);
+        setCopyMessage("");
+      }
+      setError("");
+      setVersionsError("");
+
+      const [detailSucceeded, versionsSucceeded] = await Promise.all([
+        requestDetail(id, generation, source),
+        requestVersions(id, generation, source, targetVersionCount, requiredVersionIds),
+      ]);
+      if (requestGenerationRef.current !== generation) return;
+      if (detailSucceeded && versionsSucceeded) setLastCheckedAt(new Date());
+      setRefreshing(false);
+      if (inFlightGenerationRef.current === generation) inFlightGenerationRef.current = null;
+    },
+    [id, requestDetail, requestVersions],
+  );
+
   useEffect(() => {
     if (!id) return undefined;
-    const generation = ++requestGenerationRef.current;
     setStateId(id);
     setData(null);
     setVersions([]);
@@ -101,51 +214,26 @@ export function RawDataDetailPage() {
     setLoading(true);
     setVersionsLoading(true);
     setLoadingMore(false);
+    setRefreshing(false);
+    setLastCheckedAt(null);
     setError("");
     setVersionsError("");
     setJsonSearch("");
     setCopyMessage("");
     setCompareLeft("current");
     setCompareRight("");
-
-    void api
-      .getRawData(id)
-      .then((detail) => {
-        if (requestGenerationRef.current !== generation) return;
-        setData(detail);
-      })
-      .catch((caught: unknown) => {
-        if (requestGenerationRef.current !== generation) return;
-        setError(getApiErrorMessage(caught, "原始数据详情加载失败，请稍后重试"));
-      })
-      .finally(() => {
-        if (requestGenerationRef.current === generation) setLoading(false);
-      });
-
-    void api
-      .listRawDataVersions(id)
-      .then((history) => {
-        if (requestGenerationRef.current !== generation) return;
-        setVersions(history.items);
-        setNextCursor(history.nextCursor ?? null);
-      })
-      .catch((caught: unknown) => {
-        if (requestGenerationRef.current !== generation) return;
-        setVersionsError(getApiErrorMessage(caught, "版本历史加载失败，请稍后重试"));
-      })
-      .finally(() => {
-        if (requestGenerationRef.current === generation) setVersionsLoading(false);
-      });
+    inFlightGenerationRef.current = null;
+    void loadData("initial");
 
     return () => {
-      if (requestGenerationRef.current === generation) {
-        requestGenerationRef.current += 1;
-      }
+      requestGenerationRef.current += 1;
+      inFlightGenerationRef.current = null;
     };
-  }, [id]);
+  }, [id, loadData]);
 
   async function loadMoreVersions() {
-    if (!id || !nextCursor) return;
+    if (!id || !nextCursor || loadingMore || refreshing || inFlightGenerationRef.current !== null)
+      return;
     const targetId = id;
     const cursor = nextCursor;
     const generation = requestGenerationRef.current;
@@ -200,15 +288,49 @@ export function RawDataDetailPage() {
           </div>
         ) : null}
         {currentError ? (
-          <Alert className="page-alert" role="alert" title={currentError} showIcon type="error" />
+          <Alert
+            action={
+              <Button
+                disabled={refreshing}
+                onClick={() =>
+                  void loadData(
+                    currentData || currentVersions.length ? "manual" : "initial",
+                    currentVersions.length,
+                    comparedVersionIds,
+                  )
+                }
+              >
+                重新加载详情
+              </Button>
+            }
+            className="page-alert"
+            role="alert"
+            title={currentError}
+            showIcon
+            type={currentData ? "warning" : "error"}
+          />
         ) : null}
         {currentVersionsError ? (
           <Alert
+            action={
+              <Button
+                disabled={refreshing}
+                onClick={() =>
+                  void loadData(
+                    currentData ? "manual" : "initial",
+                    currentVersions.length,
+                    comparedVersionIds,
+                  )
+                }
+              >
+                重新加载版本
+              </Button>
+            }
             className="page-alert"
             role="alert"
             title={currentVersionsError}
             showIcon
-            type="error"
+            type={currentVersions.length ? "warning" : "error"}
           />
         ) : null}
         {!pageLoading && currentData ? (
@@ -237,24 +359,39 @@ export function RawDataDetailPage() {
                   ) : null}
                 </p>
               </div>
-              {verificationTaskPath || verificationRunPath ? (
-                <div className="heading-actions">
-                  {verificationTaskPath ? (
-                    <Link
-                      className="action-link action-link--neutral"
-                      to={verificationTaskPath}
-                      state={sourceState}
-                    >
-                      返回任务
-                    </Link>
-                  ) : null}
-                  {verificationRunPath ? (
-                    <Link className="m3-link" to={verificationRunPath}>
-                      查看运行
-                    </Link>
-                  ) : null}
-                </div>
-              ) : null}
+              <div className="m3-refresh-controls">
+                <RefreshStatus
+                  failedWithPreviousData={Boolean(
+                    lastCheckedAt && (currentError || currentVersionsError),
+                  )}
+                  lastUpdatedAt={lastCheckedAt}
+                  refreshing={refreshing}
+                />
+                <Button
+                  aria-label="刷新数据"
+                  disabled={loading || currentVersionsLoading || refreshing || loadingMore}
+                  loading={refreshing}
+                  onClick={() =>
+                    void loadData("manual", currentVersions.length, comparedVersionIds)
+                  }
+                >
+                  刷新数据
+                </Button>
+                {verificationTaskPath ? (
+                  <Link
+                    className="action-link action-link--neutral"
+                    to={verificationTaskPath}
+                    state={sourceState}
+                  >
+                    返回任务
+                  </Link>
+                ) : null}
+                {verificationRunPath ? (
+                  <Link className="m3-link" to={verificationRunPath}>
+                    查看运行
+                  </Link>
+                ) : null}
+              </div>
             </header>
             <section className="m3-card m3-summary-grid raw-data-summary" aria-label="原始数据摘要">
               <div>
@@ -346,6 +483,7 @@ export function RawDataDetailPage() {
                   版本 A
                   <Select
                     aria-label="版本 A"
+                    disabled={refreshing}
                     options={[
                       { label: "当前快照", value: "current" },
                       ...currentVersions.map((version) => ({
@@ -361,6 +499,7 @@ export function RawDataDetailPage() {
                   版本 B
                   <Select
                     aria-label="版本 B"
+                    disabled={refreshing}
                     options={[
                       { label: "选择版本", value: "" },
                       ...currentVersions.map((version) => ({
@@ -430,7 +569,11 @@ export function RawDataDetailPage() {
           ) : null}
           {currentNextCursor ? (
             <div className="load-more-row">
-              <Button loading={loadingMore} onClick={() => void loadMoreVersions()}>
+              <Button
+                disabled={refreshing}
+                loading={loadingMore}
+                onClick={() => void loadMoreVersions()}
+              >
                 {loadingMore ? "加载中…" : "加载更多版本"}
               </Button>
             </div>

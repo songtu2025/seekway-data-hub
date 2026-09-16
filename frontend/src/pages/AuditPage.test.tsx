@@ -288,6 +288,52 @@ describe("审计日志列表", () => {
     });
   });
 
+  it("同条件刷新保留已加载数量和详情，阻止重复请求且失败显示 warning", async () => {
+    const refresh = deferred<AuditLogListResponse>();
+    vi.mocked(api.listAuditLogs)
+      .mockResolvedValueOnce({
+        items: [{ id: 1, action: "audit.first", result: "success", requestId: "request-1" }],
+        nextCursor: "audit-next",
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 2, action: "audit.second", result: "success", requestId: "request-2" }],
+      })
+      .mockReturnValueOnce(refresh.promise);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <AuditPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("audit.first");
+    await user.click(screen.getByRole("button", { name: "加载更多" }));
+    await screen.findByText("audit.second");
+    const detailButtons = screen.getAllByRole("button", { name: "查看详情" });
+    await user.click(detailButtons[1]);
+    expect(screen.getByRole("dialog", { name: "操作详情" })).toHaveTextContent("request-2");
+
+    fireEvent.click(screen.getByRole("button", { name: /^筛\s*选$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^筛\s*选$/ }));
+    await waitFor(() => expect(api.listAuditLogs).toHaveBeenCalledTimes(3));
+    expect(screen.getByText("audit.first")).toBeInTheDocument();
+    expect(screen.getAllByText("audit.second")).not.toHaveLength(0);
+    expect(screen.getByText("已加载 2 条")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "操作详情" })).toHaveTextContent("request-2");
+    expect(screen.getByText(/正在刷新 · 上次检查/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "刷新审计日志" })).toBeDisabled();
+
+    await act(async () => {
+      refresh.reject(new Error("offline"));
+      await refresh.promise.catch(() => undefined);
+    });
+    expect(screen.getByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getAllByText("audit.second")).not.toHaveLength(0);
+    expect(screen.getByText("已加载 2 条")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "操作详情" })).toHaveTextContent("request-2");
+    expect(screen.getByText(/刷新失败 · 仍显示 .* 的结果/)).toBeVisible();
+  });
+
   it("支持按操作、结果和时间筛选，并在详情中保留技术追踪信息", async () => {
     vi.mocked(api.listAuditLogs)
       .mockResolvedValueOnce({ items: [] })

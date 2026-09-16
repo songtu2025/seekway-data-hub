@@ -75,6 +75,12 @@ describe("同步任务列表", () => {
     vi.mocked(api.getApiCatalog).mockResolvedValue([]);
     vi.mocked(api.getWorkerRuntime).mockResolvedValue({
       availability: "online",
+      capacityStatus: "ready",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 1,
+      busyWorkerCount: 0,
+      idleWorkerCount: 1,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-08-27T08:00:00Z",
       currentJobId: null,
       queueDepth: 0,
@@ -141,12 +147,14 @@ describe("同步任务列表", () => {
 
     visibility.mockReturnValue("visible");
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
+      document.dispatchEvent(new Event("visibilitychange"));
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(api.listSyncJobs).toHaveBeenCalledTimes(2);
     expect(screen.getAllByText("已完成")).toHaveLength(1);
     expect(screen.queryByText("任务状态已自动更新")).not.toBeInTheDocument();
-    expect(screen.getByText(/自动刷新 · 更新于/)).toBeInTheDocument();
+    expect(screen.getByText(/上次检查 \d{2}:\d{2}:\d{2}/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新任务" })).toBeEnabled();
   });
 
@@ -179,7 +187,7 @@ describe("同步任务列表", () => {
       await backgroundRefresh.promise.catch(() => undefined);
     });
     expect(screen.getByRole("link", { name: "任务 #1" })).toBeInTheDocument();
-    expect(screen.getByText("自动刷新失败，当前仍显示上次结果")).toBeInTheDocument();
+    expect(screen.getByText(/刷新失败 · 仍显示 .* 的结果/)).toBeInTheDocument();
   });
 
   it("轮询窗口状态时保持逻辑任务状态和行位置稳定", async () => {
@@ -647,7 +655,7 @@ describe("同步任务列表", () => {
     expect(await screen.findByRole("link", { name: "任务 #2" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "任务 #1" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "任务 #2" })).toHaveLength(1);
-    expect(screen.getByText("任务状态已刷新")).toBeInTheDocument();
+    expect(screen.getByText(/上次检查 \d{2}:\d{2}:\d{2}/)).toBeInTheDocument();
     expect(api.listSyncJobs).toHaveBeenLastCalledWith(
       expect.objectContaining({ cursor: undefined, limit: 20 }),
     );

@@ -51,6 +51,12 @@ describe("DataSyncPanel", () => {
     vi.clearAllMocks();
     vi.mocked(api.getWorkerRuntime).mockResolvedValue({
       availability: "online",
+      capacityStatus: "ready",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 1,
+      busyWorkerCount: 0,
+      idleWorkerCount: 1,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-09-06T08:00:00Z",
       currentJobId: null,
       queueDepth: 0,
@@ -113,6 +119,41 @@ describe("DataSyncPanel", () => {
       "csrf-token",
     );
     expect(await screen.findByText("同步任务已排队")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看最新数据" })).not.toBeInTheDocument();
+  });
+
+  it("后续页同步完成后保留当前位置并由用户查看最新数据", async () => {
+    const completedJob: SyncJob = {
+      id: 99,
+      apiCode: "amazon_shop_page",
+      jobType: "sync",
+      status: "success",
+    };
+    vi.mocked(api.listSyncJobs)
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [completedJob] });
+    const onSynced = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DataSyncPanel
+          accounts={[account]}
+          apiCode="amazon_shop_page"
+          loadedCount={10}
+          preservePageOnSync
+          selectedAccountId=""
+          onSynced={onSynced}
+        />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "按进度同步" }));
+
+    expect(await screen.findByText("同步完成，有新数据可查看")).toBeInTheDocument();
+    expect(onSynced).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "查看最新数据" }));
+    expect(onSynced).toHaveBeenCalledOnce();
   });
 
   it("全部账号且存在多个可用账号时要求先选择账号", async () => {
@@ -141,6 +182,12 @@ describe("DataSyncPanel", () => {
     };
     vi.mocked(api.getWorkerRuntime).mockResolvedValue({
       availability: "busy",
+      capacityStatus: "ready",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 1,
+      busyWorkerCount: 1,
+      idleWorkerCount: 0,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-09-06T08:00:00Z",
       currentJobId: activeJob.id,
       queueDepth: 0,
@@ -170,6 +217,12 @@ describe("DataSyncPanel", () => {
   it("Worker 忙碌且当前接口空闲时允许加入同步队列", async () => {
     vi.mocked(api.getWorkerRuntime).mockResolvedValue({
       availability: "busy",
+      capacityStatus: "ready",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 1,
+      busyWorkerCount: 1,
+      idleWorkerCount: 0,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-09-06T08:00:00Z",
       currentJobId: 77,
       queueDepth: 1,

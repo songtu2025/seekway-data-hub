@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -54,6 +54,14 @@ function scheduledPlan(index: number, overrides: Partial<ScheduledPlan> = {}): S
     latestScheduledJob: index === 0 ? { id: 30, taskNo: "TASK-30", status: "success" } : null,
     ...overrides,
   };
+}
+
+function deferred<T>() {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((_, nextReject) => {
+    reject = nextReject;
+  });
+  return { promise, reject };
 }
 
 describe("独立定时计划列表", () => {
@@ -116,6 +124,32 @@ describe("独立定时计划列表", () => {
     expect(screen.queryByRole("link", { name: "创建定时计划" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "刷新计划" }));
     expect((await screen.findAllByRole("link", { name: "查看计划" })).length).toBe(10);
+  });
+
+  it("刷新计划保留筛选分页和旧表格，重复点击只发一次请求", async () => {
+    const refresh = deferred<ScheduledPlan[]>();
+    vi.mocked(api.listScheduledPlans)
+      .mockResolvedValueOnce(Array.from({ length: 12 }, (_, index) => scheduledPlan(index)))
+      .mockReturnValueOnce(refresh.promise);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/jobs/plans?account=8&page=2"]}>
+        <ScheduledPlansPage />
+        <CurrentLocation />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("接口 10 · api_10");
+    await user.dblClick(screen.getByRole("button", { name: "刷新计划" }));
+    await waitFor(() => expect(api.listScheduledPlans).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("接口 10 · api_10")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("account=8&page=2");
+    expect(document.querySelector(".scheduled-plans-table .ant-spin-spinning")).toBeNull();
+
+    await act(async () => refresh.reject(new Error("offline")));
+    expect(screen.getByText("接口 10 · api_10")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveClass("ant-alert-warning");
+    expect(screen.getByText(/刷新失败 · 仍显示 .* 的结果/)).toBeVisible();
   });
 
   it("解释精确、动态、追平、不可用和无日期窗口的数据范围", async () => {

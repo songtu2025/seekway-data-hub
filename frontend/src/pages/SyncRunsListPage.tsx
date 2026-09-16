@@ -6,6 +6,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { JijiaAccount, SyncRun } from "../api/types";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import {
   formatDate,
   getApiErrorMessage,
@@ -25,53 +26,81 @@ export function SyncRunsPage() {
   ]);
   const [searchParams, setSearchParams] = useSearchParams();
   const requestSequenceRef = useRef(0);
+  const inFlightRequestKeysRef = useRef(new Map<string, number>());
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [accounts, setAccounts] = useState<JijiaAccount[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [accountFilter, setAccountFilter] = useState(searchParams.get("account") ?? "");
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") ?? "");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [accountError, setAccountError] = useState("");
   const filtersRef = useRef({ account: accountFilter, status: statusFilter });
   filtersRef.current = { account: accountFilter, status: statusFilter };
 
-  const loadRuns = useCallback(async (cursor?: string, filters = filtersRef.current) => {
-    const requestSequence = ++requestSequenceRef.current;
-    setError("");
-    if (cursor) {
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
-      setLoadingMore(false);
-    }
-    try {
-      const result = await api.listSyncRuns({
-        cursor,
-        jijiaAccountId: filters.account ? Number(filters.account) : undefined,
-        status: filters.status || undefined,
-      });
-      if (requestSequenceRef.current !== requestSequence) return;
-      setRuns((current) => (cursor ? [...current, ...result.items] : result.items));
-      setNextCursor(result.nextCursor ?? null);
-    } catch (caught) {
-      if (requestSequenceRef.current !== requestSequence) return;
-      setError(getApiErrorMessage(caught, "运行记录加载失败，请稍后重试"));
-    } finally {
-      if (requestSequenceRef.current === requestSequence) {
-        if (cursor) {
-          setLoadingMore(false);
-        } else {
-          setLoading(false);
+  const loadRuns = useCallback(
+    async (
+      cursor?: string,
+      filters = filtersRef.current,
+      source: "initial" | "filter" | "manual" | "page" = cursor ? "page" : "manual",
+    ) => {
+      const requestKey = `${cursor ?? "first"}:${filters.account}:${filters.status}`;
+      if (inFlightRequestKeysRef.current.get(requestKey) === requestSequenceRef.current) return;
+      const requestSequence = ++requestSequenceRef.current;
+      inFlightRequestKeysRef.current.set(requestKey, requestSequence);
+      setError("");
+      setRefreshNotice("");
+      if (cursor) {
+        setLoadingMore(true);
+      } else if (source === "manual") {
+        setRefreshing(true);
+        setRefreshNotice("");
+      } else {
+        if (source === "filter") {
+          setRuns([]);
+          setLastUpdatedAt(null);
+        }
+        setLoading(true);
+        setLoadingMore(false);
+      }
+      try {
+        const result = await api.listSyncRuns({
+          cursor,
+          jijiaAccountId: filters.account ? Number(filters.account) : undefined,
+          status: filters.status || undefined,
+        });
+        if (requestSequenceRef.current !== requestSequence) return;
+        setRuns((current) => (cursor ? [...current, ...result.items] : result.items));
+        setNextCursor(result.nextCursor ?? null);
+        setLastUpdatedAt(new Date());
+        if (source === "manual") setRefreshNotice("运行记录已刷新");
+      } catch (caught) {
+        if (requestSequenceRef.current !== requestSequence) return;
+        setError(getApiErrorMessage(caught, "运行记录加载失败，请稍后重试"));
+      } finally {
+        if (requestSequenceRef.current === requestSequence) {
+          if (cursor) {
+            setLoadingMore(false);
+          } else {
+            setLoading(false);
+            setRefreshing(false);
+          }
+        }
+        if (inFlightRequestKeysRef.current.get(requestKey) === requestSequence) {
+          inFlightRequestKeysRef.current.delete(requestKey);
         }
       }
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
-    const requestSequence = ++requestSequenceRef.current;
     let active = true;
+    const inFlightRequestKeys = inFlightRequestKeysRef.current;
     void api
       .listAccounts()
       .then((accountRows) => {
@@ -82,29 +111,13 @@ export function SyncRunsPage() {
           setAccountError(getApiErrorMessage(caught, "账号筛选选项加载失败，请稍后重试"));
         }
       });
-    void api
-      .listSyncRuns({
-        jijiaAccountId: filtersRef.current.account ? Number(filtersRef.current.account) : undefined,
-        status: filtersRef.current.status || undefined,
-      })
-      .then((result) => {
-        if (requestSequenceRef.current !== requestSequence) return;
-        setRuns(result.items);
-        setNextCursor(result.nextCursor ?? null);
-      })
-      .catch((caught: unknown) => {
-        if (requestSequenceRef.current === requestSequence) {
-          setError(getApiErrorMessage(caught, "运行记录加载失败，请稍后重试"));
-        }
-      })
-      .finally(() => {
-        if (requestSequenceRef.current === requestSequence) setLoading(false);
-      });
+    void loadRuns(undefined, filtersRef.current, "initial");
     return () => {
       active = false;
       requestSequenceRef.current += 1;
+      inFlightRequestKeys.clear();
     };
-  }, []);
+  }, [loadRuns]);
 
   const columns: TableColumnsType<SyncRun> = [
     {
@@ -172,9 +185,22 @@ export function SyncRunsPage() {
           <div>
             <h1>执行批次记录</h1>
           </div>
-          <Button aria-label="刷新" onClick={() => void loadRuns()}>
-            刷新
-          </Button>
+          <div className="m3-refresh-controls">
+            <RefreshStatus
+              failedWithPreviousData={Boolean(error && runs.length)}
+              lastUpdatedAt={lastUpdatedAt}
+              manualRefreshMessage={refreshNotice}
+              refreshing={refreshing}
+            />
+            <Button
+              aria-label={refreshing ? "正在刷新" : "刷新"}
+              disabled={loading || refreshing || loadingMore}
+              loading={refreshing}
+              onClick={() => void loadRuns(undefined, filtersRef.current, "manual")}
+            >
+              刷新
+            </Button>
+          </div>
         </header>
         <div className="run-compat-notice" role="note">
           <Alert
@@ -192,7 +218,11 @@ export function SyncRunsPage() {
           />
         </div>
         {error || accountError ? (
-          <Alert title={error || accountError} showIcon type="error" />
+          <Alert
+            title={error || accountError}
+            showIcon
+            type={runs.length > 0 ? "warning" : "error"}
+          />
         ) : null}
         <Form
           className="m3-filter"
@@ -203,7 +233,7 @@ export function SyncRunsPage() {
             if (accountFilter) next.set("account", accountFilter);
             if (statusFilter) next.set("status", statusFilter);
             setSearchParams(next, { replace: true });
-            void loadRuns();
+            void loadRuns(undefined, filtersRef.current, "filter");
           }}
         >
           <Form.Item label="积加账号">
@@ -259,23 +289,7 @@ export function SyncRunsPage() {
                 setAccountFilter("");
                 setStatusFilter("");
                 setSearchParams({}, { replace: true });
-                const requestSequence = ++requestSequenceRef.current;
-                setError("");
-                setLoading(true);
-                void api
-                  .listSyncRuns()
-                  .then((result) => {
-                    if (requestSequenceRef.current !== requestSequence) return;
-                    setRuns(result.items);
-                    setNextCursor(result.nextCursor ?? null);
-                  })
-                  .catch((caught: unknown) => {
-                    if (requestSequenceRef.current === requestSequence)
-                      setError(getApiErrorMessage(caught, "运行记录加载失败，请稍后重试"));
-                  })
-                  .finally(() => {
-                    if (requestSequenceRef.current === requestSequence) setLoading(false);
-                  });
+                void loadRuns(undefined, { account: "", status: "" }, "filter");
               }}
             >
               重置筛选
@@ -284,10 +298,12 @@ export function SyncRunsPage() {
           <small className="timezone-note">{timeZoneNote()}</small>
         </Form>
         <section className="m3-card" aria-labelledby="runs-title">
-          <h2 id="runs-title">最近批次</h2>
-          {loading ? <Spin description="正在加载运行记录…" /> : null}
+          <div className="m3-card-heading">
+            <h2 id="runs-title">最近批次</h2>
+          </div>
+          {loading && runs.length === 0 ? <Spin description="正在加载运行记录…" /> : null}
           {!loading && !error && runs.length === 0 ? <Empty description="暂无运行记录" /> : null}
-          {!loading && runs.length > 0 ? (
+          {runs.length > 0 ? (
             <div className="responsive-table-wrap responsive-table-wrap--cards">
               <Table
                 className="responsive-table responsive-table--cards runs-table"

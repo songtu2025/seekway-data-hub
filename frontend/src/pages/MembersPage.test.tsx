@@ -96,6 +96,71 @@ describe("成员与权限页", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("邀请列表暂不可用");
   });
 
+  it("手动刷新保留搜索、当前成员和旧列表，并阻止重复请求与写操作", async () => {
+    const usersRefresh = deferred<User[]>();
+    const invitationsRefresh = deferred<Invitation[]>();
+    vi.mocked(api.listUsers)
+      .mockResolvedValueOnce(memberRows())
+      .mockReturnValueOnce(usersRefresh.promise);
+    vi.mocked(api.listInvitations)
+      .mockResolvedValueOnce([pendingInvitation()])
+      .mockReturnValueOnce(invitationsRefresh.promise);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/members?q=operator&member=2"]}>
+        <MembersPage />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/上次检查 \d{2}:\d{2}:\d{2}/);
+
+    await user.dblClick(screen.getByRole("button", { name: "刷新成员与邀请" }));
+
+    expect(api.listUsers).toHaveBeenCalledTimes(2);
+    expect(api.listInvitations).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/正在刷新 · 上次检查/)).toBeVisible();
+    expect(screen.getByRole("searchbox", { name: "搜索成员" })).toHaveValue("operator");
+    expect(screen.getAllByText("operator@example.com").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "刷新成员与邀请" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /邀请成员/ })).toBeDisabled();
+    expect(screen.getByLabelText("当前角色")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "停用成员" })).toBeDisabled();
+
+    await act(async () => {
+      usersRefresh.resolve(memberRows());
+      invitationsRefresh.resolve([pendingInvitation()]);
+      await Promise.all([usersRefresh.promise, invitationsRefresh.promise]);
+    });
+    expect(screen.getByRole("button", { name: "刷新成员与邀请" })).toBeEnabled();
+    expect(screen.getByRole("searchbox", { name: "搜索成员" })).toHaveValue("operator");
+  });
+
+  it("刷新局部失败时采用成功结果、保留失败数据并重新选择可用成员", async () => {
+    vi.mocked(api.listUsers)
+      .mockResolvedValueOnce(memberRows())
+      .mockResolvedValueOnce([memberRows()[0]]);
+    vi.mocked(api.listInvitations)
+      .mockResolvedValueOnce([pendingInvitation()])
+      .mockRejectedValueOnce(new ApiError("邀请列表暂不可用", 503, "SERVICE_UNAVAILABLE"));
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/members?member=2"]}>
+        <MembersPage />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/上次检查 \d{2}:\d{2}:\d{2}/);
+
+    await user.click(screen.getByRole("button", { name: "刷新成员与邀请" }));
+
+    expect(await screen.findByText(/刷新失败 · 仍显示/)).toBeVisible();
+    expect(screen.queryByText("operator@example.com")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("当前角色")).toBeDisabled();
+    expect(screen.getByText("邀请列表暂不可用").closest(".ant-alert")).toHaveClass(
+      "ant-alert-warning",
+    );
+    await user.click(screen.getByRole("button", { name: "邀请 1" }));
+    expect(screen.getAllByText("viewer@example.com").length).toBeGreaterThan(0);
+  });
+
   it("管理员可按固定角色发送邀请", async () => {
     const user = userEvent.setup();
     render(

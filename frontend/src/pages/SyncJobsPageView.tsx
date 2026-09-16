@@ -17,9 +17,11 @@ import type {
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { CursorPagination } from "../components/CursorPagination";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { SyncJobProgressSummary } from "../components/SyncJobReadModel";
 import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
 import { useCursorPagination } from "../hooks/useCursorPagination";
+import { useVisiblePolling } from "../hooks/useVisiblePolling";
 import { formatDate, getApiErrorMessage, timeZoneNote } from "./m3Utils";
 import {
   executionStageLabel,
@@ -323,6 +325,7 @@ export function SyncJobsPage() {
         setLastUpdatedAt(new Date());
         setAutoRefreshWarning("");
         if (source === "manual") setManualRefreshMessage("任务状态已刷新");
+        if (source === "auto") setManualRefreshMessage("");
       } catch (caught) {
         if (!isCurrentRequest()) return;
         if (source === "auto") {
@@ -357,34 +360,11 @@ export function SyncJobsPage() {
 
   const hasActiveJobs = jobs.some((job) => isTaskActive(getTaskStatus(job)));
 
-  useEffect(() => {
-    if (!hasActiveJobs) return undefined;
-    let cancelled = false;
-    let timer: number | undefined;
-
-    const scheduleNextPoll = () => {
-      timer = window.setTimeout(async () => {
-        if (document.visibilityState === "visible") {
-          await loadJobs(currentCursorRef.current, "auto");
-        }
-        if (!cancelled) scheduleNextPoll();
-      }, JOBS_POLL_INTERVAL_MS);
-    };
-
-    scheduleNextPoll();
-    return () => {
-      cancelled = true;
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [
-    appliedAccountFilter,
-    appliedApiFilter,
-    appliedGroupFilter,
-    appliedStatusFilter,
-    appliedTriggerFilter,
-    hasActiveJobs,
-    loadJobs,
-  ]);
+  useVisiblePolling({
+    enabled: hasActiveJobs,
+    intervalMs: JOBS_POLL_INTERVAL_MS,
+    onPoll: () => loadJobs(currentCursorRef.current, "auto"),
+  });
 
   function applyFilterSearch(next: URLSearchParams, nextFilters: JobFilters) {
     if (next.toString() === appliedQuery) {
@@ -727,24 +707,12 @@ export function SyncJobsPage() {
           <div className="m3-card-heading">
             <h2 id="jobs-title">任务记录</h2>
             <div className="m3-refresh-controls">
-              <span>
-                自动刷新 ·{" "}
-                {lastUpdatedAt
-                  ? `更新于 ${lastUpdatedAt.toLocaleTimeString("zh-CN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: false,
-                    })}`
-                  : "等待首次更新"}
-              </span>
-              {manualRefreshMessage ? (
-                <span aria-live="polite" className="m3-refresh-feedback" role="status">
-                  {manualRefreshMessage}
-                </span>
-              ) : null}
-              {autoRefreshWarning ? (
-                <span className="m3-refresh-warning">{autoRefreshWarning}</span>
-              ) : null}
+              <RefreshStatus
+                failedWithPreviousData={Boolean((error || autoRefreshWarning) && jobs.length)}
+                lastUpdatedAt={lastUpdatedAt}
+                manualRefreshMessage={manualRefreshMessage}
+                refreshing={refreshing}
+              />
               <Button
                 aria-label={refreshing ? "正在刷新任务" : "刷新任务"}
                 disabled={refreshing}

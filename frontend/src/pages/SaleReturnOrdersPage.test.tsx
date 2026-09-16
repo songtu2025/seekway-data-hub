@@ -137,6 +137,12 @@ describe("退货订单列表", () => {
     vi.mocked(api.listAccounts).mockResolvedValue([account]);
     vi.mocked(api.getWorkerRuntime).mockResolvedValue({
       availability: "online",
+      capacityStatus: "ready",
+      configuredWorkerCount: 1,
+      onlineWorkerCount: 1,
+      busyWorkerCount: 0,
+      idleWorkerCount: 1,
+      staleWorkerCount: 0,
       heartbeatAt: "2026-09-06T08:00:00Z",
       currentJobId: null,
       queueDepth: 0,
@@ -259,9 +265,10 @@ describe("退货订单列表", () => {
 
   it("旧筛选返回不能覆盖新筛选", async () => {
     const oldRequest = deferred<SaleReturnOrderListResponse>();
+    const currentRequest = deferred<SaleReturnOrderListResponse>();
     vi.mocked(api.listSaleReturnOrders)
       .mockReturnValueOnce(oldRequest.promise)
-      .mockResolvedValueOnce({ items: [order] });
+      .mockReturnValueOnce(currentRequest.promise);
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -271,10 +278,15 @@ describe("退货订单列表", () => {
 
     await user.type(screen.getByLabelText("SKU"), "sku-1");
     await user.click(screen.getByRole("button", { name: /^查\s*询$/ }));
-    expect(await screen.findByRole("button", { name: "order-1" })).toBeInTheDocument();
+    expect(await screen.findByText("正在查询 · 已应用筛选")).toBeInTheDocument();
 
     await act(async () => {
       oldRequest.resolve({ items: [] });
+    });
+    expect(screen.getByText("正在查询 · 已应用筛选")).toBeInTheDocument();
+
+    await act(async () => {
+      currentRequest.resolve({ items: [order] });
     });
     expect(screen.getByRole("button", { name: "order-1" })).toBeInTheDocument();
   });

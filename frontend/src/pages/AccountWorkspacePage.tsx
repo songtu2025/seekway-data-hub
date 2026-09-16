@@ -6,6 +6,7 @@ import { api, ApiError } from "../api/client";
 import type { JijiaAccount } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
+import { RefreshStatus } from "../components/RefreshStatus";
 import { accountStatusNames, formatAccountDate, getAccountReadiness } from "./accountReadiness";
 import { getReturnNavigation, statusLabel } from "./m3Utils";
 
@@ -31,26 +32,48 @@ export function AccountWorkspacePage() {
   const routeNotice = routeState?.accountNotice ?? "";
   const [account, setAccount] = useState<JijiaAccount | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(routeNotice);
   const [workflowAlert, setWorkflowAlert] = useState(routeAlert);
   const [editOpen, setEditOpen] = useState(false);
   const requestGenerationRef = useRef(0);
+  const inFlightGenerationRef = useRef<number | null>(null);
+  const routeAccountIdRef = useRef(accountId);
+  routeAccountIdRef.current = accountId;
 
   const loadAccount = useCallback(
-    async (clearExistingError = true) => {
+    async (source: "initial" | "manual" | "mutation", clearExistingError = true) => {
+      if (inFlightGenerationRef.current !== null) return;
       const generation = ++requestGenerationRef.current;
-      if (clearExistingError) setError("");
+      inFlightGenerationRef.current = generation;
+      if (source === "initial") setLoading(true);
+      if (source === "manual") setRefreshing(true);
+      if (clearExistingError) {
+        setError("");
+        setLoadFailed(false);
+      }
       try {
         const nextAccount = await api.getAccount(accountId);
-        if (requestGenerationRef.current === generation) setAccount(nextAccount);
+        if (requestGenerationRef.current === generation) {
+          setAccount(nextAccount);
+          setLastCheckedAt(new Date());
+          setLoadFailed(false);
+        }
       } catch (caught) {
         if (requestGenerationRef.current === generation && clearExistingError) {
           setError(caught instanceof ApiError ? caught.message : "账号概览加载失败");
+          setLoadFailed(true);
         }
       } finally {
-        if (requestGenerationRef.current === generation) setLoading(false);
+        if (requestGenerationRef.current === generation) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+        if (inFlightGenerationRef.current === generation) inFlightGenerationRef.current = null;
       }
     },
     [accountId],
@@ -59,11 +82,19 @@ export function AccountWorkspacePage() {
   useEffect(() => {
     setAccount(null);
     setLoading(true);
+    setRefreshing(false);
+    setLastCheckedAt(null);
+    setLoadFailed(false);
+    setBusy(false);
+    setError("");
     setNotice(routeNotice);
     setWorkflowAlert(routeAlert);
-    void loadAccount();
+    setEditOpen(false);
+    inFlightGenerationRef.current = null;
+    void loadAccount("initial");
     return () => {
       requestGenerationRef.current += 1;
+      inFlightGenerationRef.current = null;
     };
   }, [loadAccount, routeAlert, routeNotice]);
 
@@ -73,29 +104,36 @@ export function AccountWorkspacePage() {
     refreshAfterFailure = false,
   ): Promise<boolean> {
     if (!csrfToken) return false;
+    const targetAccountId = accountId;
+    const isCurrentAccount = () => routeAccountIdRef.current === targetAccountId;
     setBusy(true);
     setError("");
+    setLoadFailed(false);
     setNotice("");
     setWorkflowAlert("");
     try {
       await action();
-      await loadAccount();
+      if (!isCurrentAccount()) return false;
+      await loadAccount("mutation");
+      if (!isCurrentAccount()) return false;
       setNotice(successMessage);
       return true;
     } catch (caught) {
-      if (refreshAfterFailure) await loadAccount(false);
+      if (!isCurrentAccount()) return false;
+      if (refreshAfterFailure) await loadAccount("mutation", false);
+      if (!isCurrentAccount()) return false;
       setError(caught instanceof ApiError ? caught.message : "操作失败，请稍后重试");
       return false;
     } finally {
-      setBusy(false);
+      if (isCurrentAccount()) setBusy(false);
     }
   }
 
   const readiness = account ? getAccountReadiness(account, canEdit) : null;
+  const pageBusy = busy || refreshing;
 
   function retryLoadAccount() {
-    setLoading(true);
-    void loadAccount();
+    void loadAccount("initial");
   }
 
   return (
@@ -109,11 +147,26 @@ export function AccountWorkspacePage() {
             <small>接入管理 / 账号概览</small>
             <h1>{account?.name ?? "账号概览"}</h1>
           </div>
-          {readiness ? (
-            <Tag className={`readiness-badge readiness-badge--${readiness.tone}`}>
-              {readiness.label}
-            </Tag>
-          ) : null}
+          <div className="m3-refresh-controls">
+            <RefreshStatus
+              failedWithPreviousData={Boolean(loadFailed && account)}
+              lastUpdatedAt={lastCheckedAt}
+              refreshing={refreshing}
+            />
+            <Button
+              aria-label="刷新账号概览"
+              disabled={loading || refreshing || busy}
+              loading={refreshing}
+              onClick={() => void loadAccount("manual")}
+            >
+              刷新账号概览
+            </Button>
+            {readiness ? (
+              <Tag className={`readiness-badge readiness-badge--${readiness.tone}`}>
+                {readiness.label}
+              </Tag>
+            ) : null}
+          </div>
         </header>
 
         {account ? (
@@ -143,7 +196,7 @@ export function AccountWorkspacePage() {
             className="page-alert"
             showIcon
             title={error}
-            type="error"
+            type={loadFailed && account ? "warning" : "error"}
           />
         ) : null}
         {loading ? (
@@ -164,7 +217,7 @@ export function AccountWorkspacePage() {
                 <p>{readiness.description}</p>
               </div>
               <PrimaryAction
-                busy={busy}
+                busy={pageBusy}
                 readiness={readiness}
                 onVerify={() =>
                   void runMutation(
@@ -191,7 +244,7 @@ export function AccountWorkspacePage() {
                     <div className="inline-actions">
                       <Button
                         className="text-button"
-                        disabled={busy}
+                        disabled={pageBusy}
                         type="text"
                         onClick={() => setEditOpen(true)}
                       >
@@ -200,7 +253,7 @@ export function AccountWorkspacePage() {
                       {account.status === "active" ? (
                         <Button
                           className="text-button"
-                          disabled={busy}
+                          disabled={pageBusy}
                           type="text"
                           onClick={() =>
                             void runMutation(
@@ -288,7 +341,7 @@ export function AccountWorkspacePage() {
                   </span>
                   <Button
                     danger
-                    disabled={busy}
+                    disabled={pageBusy}
                     onClick={() =>
                       void runMutation(
                         () => api.deactivateAccount(account.id, csrfToken!),
