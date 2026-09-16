@@ -40,6 +40,9 @@ def test_nginx_config_keeps_api_out_of_spa_fallback() -> None:
     assert '"public, max-age=31536000, immutable"' in text
     assert "Strict-Transport-Security" in text
     assert "Content-Security-Policy" in text
+    assert "script-src 'self';" in text
+    assert "style-src 'self' 'unsafe-inline';" in text
+    assert "script-src 'self' 'unsafe-inline'" not in text
 
     frontend_text = FRONTEND_NGINX_CONFIG.read_text(encoding="utf-8")
     assert "listen 8080;" in frontend_text
