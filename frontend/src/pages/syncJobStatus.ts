@@ -10,6 +10,7 @@ const taskStatusLabels: Record<SyncTaskStatus, string> = {
   success: "已完成",
   caught_up: "已追平",
   terminated: "已终止",
+  dismissed: "已忽略提醒",
 };
 
 export function isJobActive(status: string): boolean {
@@ -18,6 +19,8 @@ export function isJobActive(status: string): boolean {
 
 export function getTaskStatus(job: SyncJob): SyncTaskStatus {
   if (job.taskStatus) return job.taskStatus;
+  if (job.resolutionCode === "operator_dismissed") return "dismissed";
+  if (job.resolutionCode === "incremental_caught_up") return "caught_up";
   if (["queued", "running"].includes(job.status)) return "in_progress";
   if (job.status === "pause_requested") return "pausing";
   if (job.status === "paused") return "paused";
@@ -48,6 +51,9 @@ export function taskWindowProgress(job: SyncJob): { completed: number; total: nu
 }
 
 export function executionStageLabel(job: SyncJob): string {
+  if (getTaskStatus(job) === "dismissed") {
+    return "原执行失败，当前不再提醒";
+  }
   if (getTaskStatus(job) === "caught_up") {
     return "原执行失败，数据范围已由后续同步覆盖";
   }

@@ -2919,7 +2919,8 @@ a:focus-visible {
   color: var(--color-warning-text);
   background: var(--color-warning-subtle);
 }
-.m3-status--terminated {
+.m3-status--terminated,
+.m3-status--dismissed {
   color: var(--text-muted);
   background: var(--surface-muted);
 }

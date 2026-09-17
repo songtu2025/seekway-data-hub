@@ -18,6 +18,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin
 
+SYNC_JOB_RESOLUTION_CAUGHT_UP = "incremental_caught_up"
+SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED = "operator_dismissed"
+
 
 class SyncJob(TimestampMixin, Base):
     """保存 Web 入队任务、Worker 领取状态和同步批次关联。"""

@@ -65,12 +65,15 @@ describe("任务操作面板", () => {
           canOperate
           cancelling={false}
           controllingAction={null}
+          dispositionAction={null}
           job={job}
           rawDataPath={null}
           retrying={false}
           onCancel={vi.fn()}
           onControl={vi.fn()}
+          onDismiss={vi.fn()}
           onRequestStop={vi.fn()}
+          onRestoreAttention={vi.fn()}
           onRetry={vi.fn()}
           onShowDiagnostics={vi.fn()}
         />
@@ -98,12 +101,15 @@ describe("任务操作面板", () => {
           canOperate
           cancelling={false}
           controllingAction="resume"
+          dispositionAction={null}
           job={job}
           rawDataPath={null}
           retrying={false}
           onCancel={vi.fn()}
           onControl={vi.fn()}
+          onDismiss={vi.fn()}
           onRequestStop={vi.fn()}
+          onRestoreAttention={vi.fn()}
           onRetry={vi.fn()}
           onShowDiagnostics={vi.fn()}
         />

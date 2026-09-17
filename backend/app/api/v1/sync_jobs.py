@@ -19,6 +19,7 @@ from backend.app.services.sync_job_service import (
     cancel_job,
     create_manual_job,
     current_task_job,
+    dismiss_job_attention,
     get_job,
     get_task,
     job_data,
@@ -27,6 +28,7 @@ from backend.app.services.sync_job_service import (
     market_options,
     preview_manual_job,
     request_pause_job,
+    restore_job_attention,
     resume_job,
     retry_job,
     stop_job,
@@ -322,6 +324,30 @@ def retry_sync_task(
     return _retry_action_response(request, response, result)
 
 
+@router.post("/tasks/{task_no}/dismiss")
+def dismiss_sync_task_attention(
+    task_no: TaskNumber,
+    request: Request,
+    db: DatabaseSession,
+    context: OperatorContext,
+) -> dict[str, object]:
+    current = current_task_job(db, task_no, for_update=True)
+    job = dismiss_job_attention(db, current.id, context.user.id, request.state.request_id)
+    return _task_action_response(request, job, include_status=True)
+
+
+@router.post("/tasks/{task_no}/restore-attention")
+def restore_sync_task_attention(
+    task_no: TaskNumber,
+    request: Request,
+    db: DatabaseSession,
+    context: OperatorContext,
+) -> dict[str, object]:
+    current = current_task_job(db, task_no, for_update=True)
+    job = restore_job_attention(db, current.id, context.user.id, request.state.request_id)
+    return _task_action_response(request, job, include_status=True)
+
+
 @router.post("/{job_id}/pause")
 def pause_sync_job(
     job_id: int,
@@ -454,3 +480,25 @@ def retry_sync_job(
         settings,
     )
     return _retry_action_response(request, response, result)
+
+
+@router.post("/{job_id}/dismiss")
+def dismiss_sync_job_attention(
+    job_id: int,
+    request: Request,
+    db: DatabaseSession,
+    context: OperatorContext,
+) -> dict[str, object]:
+    job = dismiss_job_attention(db, job_id, context.user.id, request.state.request_id)
+    return success_response(request, {"jobId": job.id, "status": job.status})
+
+
+@router.post("/{job_id}/restore-attention")
+def restore_sync_job_attention(
+    job_id: int,
+    request: Request,
+    db: DatabaseSession,
+    context: OperatorContext,
+) -> dict[str, object]:
+    job = restore_job_attention(db, job_id, context.user.id, request.state.request_id)
+    return success_response(request, {"jobId": job.id, "status": job.status})

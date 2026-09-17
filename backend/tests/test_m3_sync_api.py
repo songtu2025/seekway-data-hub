@@ -1001,7 +1001,7 @@ def test_job_enqueue_is_non_blocking_and_viewer_is_read_only(
         db.commit()
     failed_detail = client.get(f"/api/v1/sync-jobs/{job_id}")
     assert failed_detail.json()["data"]["syncRunId"] == run_id
-    assert failed_detail.json()["data"]["availableActions"] == ["retry"]
+    assert failed_detail.json()["data"]["availableActions"] == ["retry", "dismiss"]
     assert failed_detail.json()["data"]["failureInfo"]["category"] == "system"
     assert failed_detail.json()["data"]["progressSummary"]["requestCount"] == 4
     assert failed_detail.json()["data"]["progressSummary"]["failedApiCount"] == 1
@@ -1554,6 +1554,125 @@ def test_retry_marks_caught_up_task_resolved_without_new_execution(
     assert any(item["taskNo"] == task_no for item in successful["items"])
     assert all(item["taskNo"] != task_no for item in attention["items"])
     assert successful["summary"]["success"] == 1
+
+
+def test_dismiss_and_restore_failed_task_attention(
+    harness: AuthHarness,
+    monkeypatch,
+) -> None:
+    client, auth, account = create_active_account(harness, monkeypatch)
+    fixed_utc = datetime(2026, 9, 17, 9, 30, 0)
+    monkeypatch.setattr(
+        "backend.app.services.sync_job_service.utc_now",
+        lambda: fixed_utc,
+    )
+    task_no = "task_operator_dismissed"
+    batch_no = "batch_operator_dismissed"
+    with harness.session_factory() as db:
+        job = SyncJob(
+            job_no="job_operator_dismissed",
+            task_no=task_no,
+            jijia_account_id=account["id"],
+            api_code="sale_return_order_page",
+            job_type="sync",
+            trigger_type="manual",
+            status="failed",
+            sync_batch_no=batch_no,
+            queued_at=fixed_utc,
+            error_code="UPSTREAM_API_FAILED",
+            error_message="同步接口执行失败",
+        )
+        db.add(job)
+        db.execute(
+            insert(failed_request_log_table).values(
+                sync_batch_no=batch_no,
+                jijia_account_id=account["id"],
+                api_code="sale_return_order_page",
+                request_method="POST",
+                error_message="safe error",
+                retry_count=1,
+                created_at=fixed_utc,
+                updated_at=fixed_utc,
+            )
+        )
+        db.commit()
+        job_id = job.id
+
+    before = client.get("/api/v1/dashboard").json()["data"]
+    assert before["failedJobs"] == 1
+    assert before["failedRequests"] == 1
+
+    dismissed = client.post(
+        f"/api/v1/sync-jobs/tasks/{task_no}/dismiss",
+        headers={"X-CSRF-Token": auth["csrfToken"]},
+    )
+    repeated_dismiss = client.post(
+        f"/api/v1/sync-jobs/tasks/{task_no}/dismiss",
+        headers={"X-CSRF-Token": auth["csrfToken"]},
+    )
+
+    assert dismissed.status_code == 200
+    assert repeated_dismiss.status_code == 200
+    detail = client.get(f"/api/v1/sync-jobs/tasks/{task_no}").json()["data"]
+    attention = client.get("/api/v1/sync-jobs?status_group=attention").json()["data"]
+    ended = client.get("/api/v1/sync-jobs?status_group=ended").json()["data"]
+    filtered = client.get("/api/v1/sync-jobs?status=dismissed").json()["data"]
+    dashboard = client.get("/api/v1/dashboard").json()["data"]
+    blocked_retry = client.post(
+        f"/api/v1/sync-jobs/{job_id}/retry",
+        headers={"X-CSRF-Token": auth["csrfToken"]},
+    )
+
+    assert detail["status"] == "failed"
+    assert detail["taskStatus"] == "dismissed"
+    assert detail["resolutionCode"] == "operator_dismissed"
+    assert detail["resolvedAt"] == "2026-09-17T09:30:00Z"
+    assert detail["errorCode"] == "UPSTREAM_API_FAILED"
+    assert detail["availableActions"] == ["restore_attention"]
+    assert any(event["eventType"] == "dismissed" for event in detail["lifecycleEvents"])
+    assert all(item["taskNo"] != task_no for item in attention["items"])
+    assert any(item["taskNo"] == task_no for item in ended["items"])
+    assert [item["taskNo"] for item in filtered["items"]] == [task_no]
+    assert dashboard["failedJobs"] == 0
+    assert dashboard["failedRequests"] == 0
+    assert blocked_retry.status_code == 409
+    assert blocked_retry.json()["error"]["code"] == "SYNC_JOB_RESOLVED"
+
+    restored = client.post(
+        f"/api/v1/sync-jobs/tasks/{task_no}/restore-attention",
+        headers={"X-CSRF-Token": auth["csrfToken"]},
+    )
+    repeated_restore = client.post(
+        f"/api/v1/sync-jobs/tasks/{task_no}/restore-attention",
+        headers={"X-CSRF-Token": auth["csrfToken"]},
+    )
+
+    assert restored.status_code == 200
+    assert repeated_restore.status_code == 200
+    restored_detail = client.get(f"/api/v1/sync-jobs/tasks/{task_no}").json()["data"]
+    restored_dashboard = client.get("/api/v1/dashboard").json()["data"]
+    assert restored_detail["taskStatus"] == "attention"
+    assert restored_detail["resolutionCode"] is None
+    assert restored_detail["resolvedAt"] is None
+    assert restored_detail["availableActions"] == ["retry", "dismiss"]
+    assert any(
+        event["eventType"] == "attention_restored" for event in restored_detail["lifecycleEvents"]
+    )
+    assert restored_dashboard["failedJobs"] == 1
+    assert restored_dashboard["failedRequests"] == 1
+    with harness.session_factory() as db:
+        audits = list(
+            db.scalars(
+                select(AuditLog).where(
+                    AuditLog.resource_id == str(job_id),
+                    AuditLog.action.in_(("sync_job.dismiss", "sync_job.restore_attention")),
+                )
+            ).all()
+        )
+        assert [audit.action for audit in audits] == [
+            "sync_job.dismiss",
+            "sync_job.restore_attention",
+        ]
 
 
 def test_manual_job_uses_update_window_after_history_checkpoint_completes(

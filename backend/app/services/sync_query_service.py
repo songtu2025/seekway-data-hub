@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import case, func, select, tuple_
+from sqlalchemy import and_, case, func, select, tuple_
 from sqlalchemy.orm import Session
 
 from backend.app.core.errors import ApiError
@@ -463,16 +463,39 @@ def list_raw_versions(
 
 def dashboard_summary(db: Session) -> dict[str, object]:
     latest_ids = latest_execution_ids()
+    unresolved_failure = and_(
+        SyncJob.status.in_(("failed", "partial_failed")),
+        SyncJob.resolution_code.is_(None),
+    )
     count_rows = db.execute(
         select(SyncJob.status, func.count(SyncJob.id))
-        .where(SyncJob.id.in_(select(latest_ids.c.id)))
+        .where(
+            SyncJob.id.in_(select(latest_ids.c.id)),
+            (SyncJob.status.not_in(("failed", "partial_failed"))) | unresolved_failure,
+        )
         .group_by(SyncJob.status)
     ).all()
     counts: dict[str, int] = {row[0]: int(row[1]) for row in count_rows}
+    unresolved_batches = (
+        select(
+            SyncJob.sync_batch_no.label("sync_batch_no"),
+            SyncJob.jijia_account_id.label("jijia_account_id"),
+        )
+        .where(
+            SyncJob.id.in_(select(latest_ids.c.id)),
+            unresolved_failure,
+            SyncJob.sync_batch_no.is_not(None),
+        )
+        .subquery()
+    )
     failed_requests = db.scalar(
         select(func.count(failed_request_log_table.c.id)).join(
-            JijiaAccount,
-            JijiaAccount.id == failed_request_log_table.c.jijia_account_id,
+            unresolved_batches,
+            and_(
+                unresolved_batches.c.sync_batch_no == failed_request_log_table.c.sync_batch_no,
+                unresolved_batches.c.jijia_account_id
+                == failed_request_log_table.c.jijia_account_id,
+            ),
         )
     )
     latest_run_row = db.execute(

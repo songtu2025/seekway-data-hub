@@ -8,6 +8,7 @@ import {
   type SyncJobControlAction,
 } from "../pages/syncJobDetailModel";
 import { changeCatchupLabel, formatDate, statusLabel } from "../pages/m3Utils";
+import { taskStatusLabel } from "../pages/syncJobStatus";
 
 export function SyncJobProgressSection({
   job,
@@ -172,11 +173,14 @@ interface SyncJobActionPanelProps {
   canOperate: boolean;
   cancelling: boolean;
   controllingAction: SyncJobControlAction | null;
+  dispositionAction: "dismiss" | "restore_attention" | null;
   retrying: boolean;
   rawDataPath: string | null;
   onCancel: () => void;
   onControl: (action: SyncJobControlAction) => void;
+  onDismiss: () => void;
   onRequestStop: () => void;
+  onRestoreAttention: () => void;
   onRetry: () => void;
   onShowDiagnostics: () => void;
 }
@@ -198,16 +202,22 @@ function SyncJobRetryButton({ retrying, onRetry }: { retrying: boolean; onRetry:
 function SyncJobFailureActionPanel({
   job,
   canRetry,
+  canDismiss,
+  dismissing,
   retrying,
   rawDataPath,
   onRetry,
+  onDismiss,
   onShowDiagnostics,
 }: {
   job: SyncJob;
   canRetry: boolean;
+  canDismiss: boolean;
+  dismissing: boolean;
   retrying: boolean;
   rawDataPath: string | null;
   onRetry: () => void;
+  onDismiss: () => void;
   onShowDiagnostics: () => void;
 }) {
   const recommendation =
@@ -237,6 +247,11 @@ function SyncJobFailureActionPanel({
             查看批次数据
           </Link>
         ) : null}
+        {canDismiss ? (
+          <Button disabled={dismissing} loading={dismissing} onClick={onDismiss}>
+            {dismissing ? "处理中…" : "忽略提醒"}
+          </Button>
+        ) : null}
         {canRetry ? <SyncJobRetryButton retrying={retrying} onRetry={onRetry} /> : null}
       </div>
     </section>
@@ -248,22 +263,29 @@ export function SyncJobActionPanel({
   canOperate,
   cancelling,
   controllingAction,
+  dispositionAction,
   retrying,
   rawDataPath,
   onCancel,
   onControl,
+  onDismiss,
   onRequestStop,
+  onRestoreAttention,
   onRetry,
   onShowDiagnostics,
 }: SyncJobActionPanelProps) {
   const failed = ["failed", "partial_failed"].includes(job.status);
-  if (job.taskStatus !== "caught_up" && (failed || job.errorMessage)) {
+  const resolved = job.taskStatus === "caught_up" || job.taskStatus === "dismissed";
+  if (!resolved && (failed || job.errorMessage)) {
     return (
       <SyncJobFailureActionPanel
+        canDismiss={canOperate && hasSyncJobAction(job, "dismiss")}
         canRetry={canOperate && hasSyncJobAction(job, "retry")}
+        dismissing={dispositionAction === "dismiss"}
         job={job}
         rawDataPath={rawDataPath}
         retrying={retrying}
+        onDismiss={onDismiss}
         onRetry={onRetry}
         onShowDiagnostics={onShowDiagnostics}
       />
@@ -288,7 +310,8 @@ export function SyncJobActionPanel({
     >
       <div className="job-next-action-copy">
         <span className="job-next-action-kicker">
-          当前状态 · {job.taskStatus === "caught_up" ? "已追平" : statusLabel(job.status)}
+          当前状态 ·{" "}
+          {resolved ? taskStatusLabel(job.taskStatus ?? "attention") : statusLabel(job.status)}
         </span>
         <h2 id="job-next-action-title">{guidance.title}</h2>
         <p
@@ -298,7 +321,7 @@ export function SyncJobActionPanel({
         </p>
       </div>
       <div className="heading-actions job-next-action-buttons">
-        {job.taskStatus === "caught_up" && job.syncRunId != null ? (
+        {resolved && job.syncRunId != null ? (
           <a
             className="action-link action-link--neutral"
             href="#job-diagnostics"
@@ -307,12 +330,21 @@ export function SyncJobActionPanel({
             查看失败请求
           </a>
         ) : null}
-        {job.taskStatus === "caught_up" && rawDataPath ? (
+        {resolved && rawDataPath ? (
           <Link className="action-link action-link--neutral" to={rawDataPath}>
             查看批次数据
           </Link>
         ) : null}
-        {canOperate && hasSyncJobAction(job, "pause") ? (
+        {canOperate && hasSyncJobAction(job, "restore_attention") ? (
+          <Button
+            disabled={dispositionAction !== null}
+            loading={dispositionAction === "restore_attention"}
+            type="primary"
+            onClick={onRestoreAttention}
+          >
+            {dispositionAction === "restore_attention" ? "恢复中…" : "恢复关注"}
+          </Button>
+        ) : canOperate && hasSyncJobAction(job, "pause") ? (
           <>
             <Button
               aria-label={controllingAction === "pause" ? "暂停中…" : "暂停任务"}

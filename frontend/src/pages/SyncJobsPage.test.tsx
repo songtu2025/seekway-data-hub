@@ -615,6 +615,31 @@ describe("同步任务列表", () => {
     expect(screen.queryByRole("link", { name: "处理失败" })).not.toBeInTheDocument();
   });
 
+  it("已忽略提醒的任务展示为历史记录而不是待处理项", async () => {
+    vi.mocked(api.listSyncJobs).mockResolvedValue({
+      items: [
+        {
+          ...syncJob(1),
+          status: "failed",
+          taskStatus: "dismissed",
+          executionStatus: "failed",
+          resolutionCode: "operator_dismissed",
+        },
+      ],
+      summary: { total: 1, active: 0, attention: 0, success: 0, ended: 1 },
+    });
+    render(
+      <MemoryRouter>
+        <SyncJobsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("已忽略提醒")).toBeInTheDocument();
+    expect(screen.getByText("原执行失败，当前不再提醒")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /查看记录/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "处理失败" })).not.toBeInTheDocument();
+  });
+
   it("初载任务失败后刷新成功仍保留已加载的账号选项", async () => {
     vi.mocked(api.listSyncJobs)
       .mockRejectedValueOnce(new Error("初载任务失败"))

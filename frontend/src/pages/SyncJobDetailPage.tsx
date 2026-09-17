@@ -54,6 +54,10 @@ export function SyncJobDetailPage() {
   const [retrying, setRetrying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [controllingAction, setControllingAction] = useState<SyncJobControlAction | null>(null);
+  const [dispositionAction, setDispositionAction] = useState<
+    "dismiss" | "restore_attention" | null
+  >(null);
+  const [dismissConfirmOpen, setDismissConfirmOpen] = useState(false);
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<number | string | null>(requestedRunId);
   const [activeHistoryTab, setActiveHistoryTab] = useState<"executions" | "events">("executions");
@@ -149,6 +153,8 @@ export function SyncJobDetailPage() {
     setRetrying(false);
     setCancelling(false);
     setControllingAction(null);
+    setDispositionAction(null);
+    setDismissConfirmOpen(false);
     setStopConfirmOpen(false);
     setSelectedRunId(null);
     setActiveHistoryTab("executions");
@@ -289,6 +295,52 @@ export function SyncJobDetailPage() {
         cancelInFlightRef.current = false;
         setCancelling(false);
       }
+    }
+  }
+
+  async function updateDisposition(action: "dismiss" | "restore_attention") {
+    if (
+      !routeIdentifier ||
+      !csrfToken ||
+      !currentJob ||
+      dispositionAction !== null ||
+      !hasSyncJobAction(currentJob, action)
+    )
+      return;
+    const targetId = currentJob.taskNo ?? routeIdentifier;
+    const generation = routeGenerationRef.current;
+    setDispositionAction(action);
+    setError("");
+    setActionNotice("");
+    requestSequenceRef.current += 1;
+    try {
+      if (action === "dismiss") {
+        if (currentJob.taskNo) {
+          await api.dismissSyncTaskAttention(currentJob.taskNo, csrfToken);
+        } else {
+          await api.dismissSyncJobAttention(targetId, csrfToken);
+        }
+      } else if (currentJob.taskNo) {
+        await api.restoreSyncTaskAttention(currentJob.taskNo, csrfToken);
+      } else {
+        await api.restoreSyncJobAttention(targetId, csrfToken);
+      }
+      if (routeGenerationRef.current !== generation) return;
+      const requestSequence = ++requestSequenceRef.current;
+      await loadJob(targetId, Boolean(currentJob.taskNo), generation, requestSequence);
+      if (routeGenerationRef.current !== generation) return;
+      setDismissConfirmOpen(false);
+      setActionNotice(action === "dismiss" ? "已忽略此失败提醒" : "已恢复关注此失败任务");
+    } catch (caught) {
+      if (routeGenerationRef.current !== generation) return;
+      setError(
+        getApiErrorMessage(
+          caught,
+          action === "dismiss" ? "忽略提醒失败，请稍后重试" : "恢复关注失败，请稍后重试",
+        ),
+      );
+    } finally {
+      if (routeGenerationRef.current === generation) setDispositionAction(null);
     }
   }
 
@@ -522,12 +574,15 @@ export function SyncJobDetailPage() {
               canOperate={canOperate}
               cancelling={cancelling}
               controllingAction={controllingAction}
+              dispositionAction={dispositionAction}
               job={currentJob}
               rawDataPath={rawDataPath}
               retrying={retrying}
               onCancel={() => void cancel()}
               onControl={(action) => void control(action)}
+              onDismiss={() => setDismissConfirmOpen(true)}
               onRequestStop={() => setStopConfirmOpen(true)}
+              onRestoreAttention={() => void updateDisposition("restore_attention")}
               onRetry={() => void retry()}
               onShowDiagnostics={() => {
                 setActiveHistoryTab("executions");
@@ -631,6 +686,24 @@ export function SyncJobDetailPage() {
             </section>
           </>
         ) : null}
+        <Modal
+          cancelText="取消"
+          cancelButtonProps={{ disabled: dispositionAction === "dismiss" }}
+          confirmLoading={dispositionAction === "dismiss"}
+          destroyOnHidden
+          okText="确认忽略"
+          open={dismissConfirmOpen}
+          title="忽略失败提醒"
+          onCancel={() => setDismissConfirmOpen(false)}
+          onOk={() => void updateDisposition("dismiss")}
+        >
+          <Alert
+            description="忽略后，此任务不再计入概览告警和“需处理”列表；失败记录不会删除，可随时恢复关注。"
+            showIcon
+            title="确认忽略此提醒吗？"
+            type="warning"
+          />
+        </Modal>
         <Modal
           cancelText="取消"
           cancelButtonProps={{ disabled: controllingAction === "stop" }}

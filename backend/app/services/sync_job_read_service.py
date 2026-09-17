@@ -4,7 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models.audit_log import AuditLog
-from backend.app.models.sync_job import SyncJob
+from backend.app.models.sync_job import (
+    SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED,
+    SyncJob,
+)
 from backend.app.models.user import AppUser
 from backend.app.services.m3_common import json_object, utc_iso
 
@@ -13,8 +16,8 @@ ACTION_BY_STATUS: dict[str, list[str]] = {
     "running": ["pause", "stop"],
     "pause_requested": ["withdraw_pause", "stop"],
     "paused": ["resume", "stop"],
-    "failed": ["retry"],
-    "partial_failed": ["retry"],
+    "failed": ["retry", "dismiss"],
+    "partial_failed": ["retry", "dismiss"],
 }
 
 AUDIT_EVENT_TYPES = {
@@ -22,6 +25,8 @@ AUDIT_EVENT_TYPES = {
     "sync_job.schedule": "created",
     "sync_job.retry": "retried",
     "sync_job.retry_noop": "resolved",
+    "sync_job.dismiss": "dismissed",
+    "sync_job.restore_attention": "attention_restored",
     "sync_job.resume": "resumed",
     "sync_job.pause_request": "pause_requested",
     "sync_job.pause_withdraw": "pause_withdrawn",
@@ -43,6 +48,8 @@ def api_display_name(job: SyncJob, catalog: dict[str, dict[str, Any]]) -> str:
 
 def available_actions(job: SyncJob, *, has_batch: bool) -> list[str]:
     """返回当前任务状态允许的操作，写接口仍执行最终事务校验。"""
+    if job.resolution_code == SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED:
+        return ["restore_attention"]
     if job.stop_after_current or job.resolution_code is not None:
         return []
     actions = list(ACTION_BY_STATUS.get(job.status, []))
