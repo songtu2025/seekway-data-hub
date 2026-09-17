@@ -3,16 +3,31 @@ import { Alert, Button, Empty, Input, Select, Spin } from "antd";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 
 import { api, ApiError } from "../api/client";
-import type { ApiPolicy, ApiPolicyUpdateInput, JijiaAccountStatus } from "../api/types";
+import type {
+  ApiCatalogItem,
+  ApiPolicy,
+  ApiPolicyUpdateInput,
+  JijiaAccountStatus,
+} from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
 import { buildPolicyUpdate, MAX_BATCH_POLICIES } from "../policyUtils";
-import { businessDomainLabel } from "../businessDomains";
+import { businessDomainKey, businessDomainLabel } from "../businessDomains";
 import { getReturnNavigation } from "./m3Utils";
 import { PolicyDomainGroup } from "../components/PolicyDomainGroup";
 
 type PolicyFilter = "all" | "enabled" | "scheduled" | "pending" | "blocked";
+
+function attachOfficialDomains(policies: ApiPolicy[], catalogItems: ApiCatalogItem[]): ApiPolicy[] {
+  const officialDomains = new Map(
+    catalogItems.map((item) => [item.apiCode, item.officialDomain?.trim() || null]),
+  );
+  return policies.map((policy) => ({
+    ...policy,
+    officialDomain: officialDomains.get(policy.apiCode) ?? policy.officialDomain,
+  }));
+}
 
 export function AccountPoliciesPage() {
   const { accountId } = useParams();
@@ -62,6 +77,7 @@ function AccountPoliciesContent() {
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const [accountLoadError, setAccountLoadError] = useState("");
   const [policiesLoadError, setPoliciesLoadError] = useState("");
+  const [domainLoadError, setDomainLoadError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(routeNotice);
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(() => new Set());
@@ -81,12 +97,14 @@ function AccountPoliciesContent() {
       else setRefreshing(true);
       setAccountLoadError("");
       setPoliciesLoadError("");
+      setDomainLoadError("");
       setError("");
       if (source === "manual") setNotice("");
 
-      const [accountResult, policiesResult] = await Promise.allSettled([
+      const [accountResult, policiesResult, catalogResult] = await Promise.allSettled([
         api.getAccount(accountId),
         api.listPolicies(accountId),
+        api.getApiCatalog(accountId),
       ]);
       if (requestGenerationRef.current !== generation || routeAccountIdRef.current !== accountId)
         return;
@@ -103,7 +121,10 @@ function AccountPoliciesContent() {
       }
 
       if (policiesResult.status === "fulfilled") {
-        const rows = policiesResult.value;
+        const rows =
+          catalogResult.status === "fulfilled"
+            ? attachOfficialDomains(policiesResult.value, catalogResult.value)
+            : policiesResult.value;
         setPolicies(rows);
         if (source === "initial") {
           const initialFilter =
@@ -138,7 +159,19 @@ function AccountPoliciesContent() {
         );
       }
 
-      if (accountResult.status === "fulfilled" && policiesResult.status === "fulfilled") {
+      if (catalogResult.status === "rejected") {
+        setDomainLoadError(
+          catalogResult.reason instanceof ApiError
+            ? catalogResult.reason.message
+            : "业务域加载失败，暂按内部分类展示",
+        );
+      }
+
+      if (
+        accountResult.status === "fulfilled" &&
+        policiesResult.status === "fulfilled" &&
+        catalogResult.status === "fulfilled"
+      ) {
         setLastCheckedAt(new Date());
       }
       setLoading(false);
@@ -159,6 +192,7 @@ function AccountPoliciesContent() {
     setLastCheckedAt(null);
     setAccountLoadError("");
     setPoliciesLoadError("");
+    setDomainLoadError("");
     setError("");
     setNotice(routeNotice);
     setSelectedCodes(new Set());
@@ -195,17 +229,18 @@ function AccountPoliciesContent() {
       (filter === "scheduled" && policy.enabled && policy.scheduleMode !== "manual_only") ||
       (filter === "pending" && !policy.enabled) ||
       (filter === "blocked" && accountStatus !== "active" && policy.enabled);
-    const matchesDomain = !domain || policy.domain === domain;
+    const matchesDomain = !domain || businessDomainKey(policy) === domain;
     return matchesSearch && matchesFilter && matchesDomain;
   });
   const selected =
     filtered.find((policy) => policy.apiCode === selectedCode) ?? filtered[0] ?? null;
-  const domains = Array.from(new Set(currentPolicies.map((policy) => policy.domain))).sort();
+  const domains = Array.from(new Set(currentPolicies.map(businessDomainKey))).sort();
   const groupedPolicies = Array.from(
     filtered.reduce((groups, policy) => {
-      const rows = groups.get(policy.domain) ?? [];
+      const domainName = businessDomainKey(policy);
+      const rows = groups.get(domainName) ?? [];
       rows.push(policy);
-      groups.set(policy.domain, rows);
+      groups.set(domainName, rows);
       return groups;
     }, new Map<string, ApiPolicy[]>()),
   );
@@ -222,7 +257,9 @@ function AccountPoliciesContent() {
     (policy) => !filtered.includes(policy),
   ).length;
   const pageBusy = bulkBusy || saving || refreshing;
-  const loadError = [accountLoadError, policiesLoadError].filter(Boolean).join("；");
+  const loadError = [accountLoadError, policiesLoadError, domainLoadError]
+    .filter(Boolean)
+    .join("；");
   const hasPreviousData = stateMatchesRoute && Boolean(accountName || currentPolicies.length);
 
   async function applyBulk(enabled: boolean) {
@@ -252,7 +289,17 @@ function AccountPoliciesContent() {
       );
       if (!isCurrent()) return;
       const updates = new Map(updated.map((policy) => [policy.apiCode, policy]));
-      setPolicies((current) => current.map((policy) => updates.get(policy.apiCode) ?? policy));
+      setPolicies((current) =>
+        current.map((policy) => {
+          const updatedPolicy = updates.get(policy.apiCode);
+          return updatedPolicy
+            ? {
+                ...updatedPolicy,
+                officialDomain: updatedPolicy.officialDomain ?? policy.officialDomain,
+              }
+            : policy;
+        }),
+      );
       setSelectedCodes(new Set());
       setNotice(`${updated.length} 个接口策略已批量保存。`);
     } catch (caught) {
@@ -278,7 +325,11 @@ function AccountPoliciesContent() {
       )
         return;
       setPolicies((current) =>
-        current.map((item) => (item.apiCode === updated.apiCode ? updated : item)),
+        current.map((item) =>
+          item.apiCode === updated.apiCode
+            ? { ...updated, officialDomain: updated.officialDomain ?? item.officialDomain }
+            : item,
+        ),
       );
       setNotice(`“${updated.name}”策略已保存。`);
     } catch (caught) {

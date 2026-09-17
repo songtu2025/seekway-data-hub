@@ -8,7 +8,7 @@ import type {
   ScheduleMode,
 } from "../api/types";
 import { buildPolicyUpdate } from "../policyUtils";
-import { businessDomainLabel } from "../businessDomains";
+import { businessDomainKey, businessDomainLabel } from "../businessDomains";
 import { formatDate, getReturnNavigation } from "../pages/m3Utils";
 
 const scheduleNames: Record<ScheduleMode, string> = {
@@ -69,12 +69,14 @@ export function PolicyDomainGroup({
         const isSelected = selectionOnly ? checked : selectedCode === policy.apiCode;
         const selectionDisabled = busy || !policy.catalogEnabled;
         const rowContent = (
-          <>
+          <span className="policy-row-grid">
             <span className="policy-row-main">
               <strong>{policy.name}</strong>
               <small>{policy.apiCode}</small>
             </span>
-            <span className="policy-row-domain">{businessDomainLabel(policy.domain)}</span>
+            <span className="policy-row-domain">
+              {businessDomainLabel(businessDomainKey(policy))}
+            </span>
             <Tag className={`badge ${policy.enabled ? "status-active" : "status-disabled"}`}>
               {!policy.catalogEnabled
                 ? "平台停用"
@@ -90,7 +92,7 @@ export function PolicyDomainGroup({
               {scheduleNames[policy.scheduleMode]}
               {policy.scheduleExpr ? ` · ${policy.scheduleExpr}` : ""}
             </span>
-          </>
+          </span>
         );
         return (
           <div

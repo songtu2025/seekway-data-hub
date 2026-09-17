@@ -2058,7 +2058,7 @@ a:focus-visible {
   outline-offset: var(--space-1);
 }
 .policy-table-head,
-.policy-row {
+.policy-row-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(75px, 0.45fr) minmax(80px, 0.45fr) minmax(
       120px,
@@ -2121,13 +2121,19 @@ a:focus-visible {
   box-shadow: inset 3px 0 0 var(--brand-action);
 }
 .policy-row {
+  display: block;
   width: 100%;
+  height: auto;
   min-height: 56px;
   border: 0;
   padding: 0 16px;
   color: var(--text);
   background: transparent;
   text-align: left;
+}
+.policy-row > span,
+.policy-row-grid {
+  width: 100%;
 }
 .policy-select-row {
   display: grid;
@@ -2155,7 +2161,7 @@ a:focus-visible {
 .policy-select-item.selected > .policy-select-row {
   background: var(--brand-soft);
 }
-.policy-row > span:first-child {
+.policy-row-main {
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -4212,6 +4218,33 @@ a:focus-visible {
   .policy-toolbar .ant-select {
     width: 100%;
   }
+  .policy-table-head {
+    display: none;
+  }
+  .policy-row-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+  .policy-row {
+    min-height: 72px;
+    padding: 12px 14px;
+  }
+  .policy-row-domain,
+  .policy-row-schedule {
+    justify-self: end;
+    text-align: right;
+  }
+  .policy-select-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+    padding-left: 10px;
+  }
+  .policy-select-row--read-only {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 0;
+  }
+  .policy-inline-editor {
+    margin: 0 10px 12px;
+  }
   .onboarding-inspector {
     position: static;
   }
@@ -4633,33 +4666,11 @@ a:focus-visible {
   .policy-summary strong {
     font-size: 11px;
   }
-  .policy-table-head {
-    display: none;
-  }
-  .policy-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px 12px;
-    padding: 13px 14px;
-  }
-  .policy-row-domain {
-    justify-self: end;
-  }
   .policy-row-schedule {
     grid-column: 1 / -1;
   }
   .policy-domain-heading {
     padding: 0 14px;
-  }
-  .policy-select-row {
-    grid-template-columns: 28px minmax(0, 1fr);
-    padding-left: 10px;
-  }
-  .policy-select-row--read-only {
-    grid-template-columns: minmax(0, 1fr);
-    padding-left: 0;
-  }
-  .policy-inline-editor {
-    margin: 0 10px 12px;
   }
   .policy-editor {
     padding: 16px;
