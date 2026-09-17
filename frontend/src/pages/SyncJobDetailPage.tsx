@@ -4,7 +4,7 @@ import type { TableColumnsType } from "antd";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { api } from "../api/client";
-import type { SyncJob } from "../api/types";
+import type { JobAcceptedResponse, SyncJob } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
@@ -205,6 +205,23 @@ export function SyncJobDetailPage() {
     void loadJob(routeIdentifier, Boolean(routeTaskNo), generation, requestSequence, "manual");
   }
 
+  async function showAcceptedExecution(
+    accepted: JobAcceptedResponse,
+    fallbackTaskNo: string | undefined,
+    generation: number,
+  ) {
+    if (routeGenerationRef.current !== generation) return;
+    const acceptedTaskNo = accepted.taskNo ?? fallbackTaskNo;
+    if (acceptedTaskNo && acceptedTaskNo === routeTaskNo) {
+      const requestSequence = ++requestSequenceRef.current;
+      await loadJob(acceptedTaskNo, true, generation, requestSequence);
+      return;
+    }
+    navigate(acceptedJobDetailPath(accepted.jobId, acceptedTaskNo), {
+      state: location.state,
+    });
+  }
+
   async function retry() {
     if (!routeIdentifier || !csrfToken || !currentJob || !hasSyncJobAction(currentJob, "retry"))
       return;
@@ -212,14 +229,12 @@ export function SyncJobDetailPage() {
     const generation = routeGenerationRef.current;
     setRetrying(true);
     setError("");
+    requestSequenceRef.current += 1;
     try {
       const accepted = currentJob.taskNo
         ? await api.retrySyncTask(currentJob.taskNo, csrfToken)
         : await api.retrySyncJob(targetId, csrfToken);
-      if (routeGenerationRef.current !== generation) return;
-      navigate(acceptedJobDetailPath(accepted.jobId, accepted.taskNo ?? currentJob.taskNo), {
-        state: location.state,
-      });
+      await showAcceptedExecution(accepted, currentJob.taskNo, generation);
     } catch (caught) {
       if (routeGenerationRef.current !== generation) return;
       setError(getApiErrorMessage(caught, "重试失败，请稍后重试"));
@@ -286,11 +301,7 @@ export function SyncJobDetailPage() {
         const accepted = currentJob.taskNo
           ? await api.resumeSyncTask(currentJob.taskNo, csrfToken)
           : await api.resumeSyncJob(routeIdentifier, csrfToken);
-        if (routeGenerationRef.current === generation) {
-          navigate(acceptedJobDetailPath(accepted.jobId, accepted.taskNo ?? currentJob.taskNo), {
-            state: location.state,
-          });
-        }
+        await showAcceptedExecution(accepted, currentJob.taskNo, generation);
         return;
       }
       if (routeGenerationRef.current !== generation) return;

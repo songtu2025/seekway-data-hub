@@ -1259,6 +1259,89 @@ describe("同步任务详情", () => {
     expect(api.retrySyncJob).toHaveBeenCalledWith("8", "csrf-token");
   });
 
+  it("同一任务号重试成功后立即加载新执行", async () => {
+    const taskNo = "task_retry_1";
+    vi.mocked(api.getSyncTask)
+      .mockResolvedValueOnce({
+        id: 8,
+        taskNo,
+        apiCode: "sale_return_order_page",
+        jobType: "history_backfill",
+        status: "failed",
+        availableActions: ["retry"],
+        errorMessage: "请求失败",
+      })
+      .mockResolvedValueOnce({
+        id: 19,
+        taskNo,
+        currentExecutionId: 19,
+        apiCode: "sale_return_order_page",
+        jobType: "history_backfill",
+        status: "queued",
+        taskStatus: "in_progress",
+        executionStatus: "queued",
+        availableActions: ["cancel"],
+      });
+    vi.mocked(api.retrySyncTask).mockResolvedValue({ jobId: 19, taskNo });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[`/jobs/tasks/${taskNo}`]}>
+        <Routes>
+          <Route path="/jobs/tasks/:taskNo" element={<SyncJobDetailPage />} />
+        </Routes>
+        <CurrentPath />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "重试任务" }));
+
+    await waitFor(() => expect(api.getSyncTask).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("当前阶段：等待领取")).toBeInTheDocument();
+    expect(screen.queryByText("任务执行失败")).not.toBeInTheDocument();
+    expect(screen.getByTestId("current-path")).toHaveTextContent(`/jobs/tasks/${taskNo}`);
+  });
+
+  it("同一任务号继续成功后立即加载新执行", async () => {
+    const taskNo = "task_paused_1";
+    vi.mocked(api.getSyncTask)
+      .mockResolvedValueOnce({
+        id: 8,
+        taskNo,
+        apiCode: "sale_return_order_page",
+        jobType: "history_backfill",
+        status: "paused",
+        availableActions: ["resume", "stop"],
+      })
+      .mockResolvedValueOnce({
+        id: 20,
+        taskNo,
+        currentExecutionId: 20,
+        apiCode: "sale_return_order_page",
+        jobType: "history_backfill",
+        status: "queued",
+        taskStatus: "in_progress",
+        executionStatus: "queued",
+        availableActions: ["cancel"],
+      });
+    vi.mocked(api.resumeSyncTask).mockResolvedValue({ jobId: 20, taskNo });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[`/jobs/tasks/${taskNo}`]}>
+        <Routes>
+          <Route path="/jobs/tasks/:taskNo" element={<SyncJobDetailPage />} />
+        </Routes>
+        <CurrentPath />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "继续执行" }));
+
+    await waitFor(() => expect(api.getSyncTask).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("当前阶段：等待领取")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "继续执行" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("current-path")).toHaveTextContent(`/jobs/tasks/${taskNo}`);
+  });
+
   it("切换任务后旧重试成功不能导航离开当前任务", async () => {
     const oldRetry = deferred<JobAcceptedResponse>();
     vi.mocked(api.getSyncJob).mockImplementation(async (jobId) => failedJob(Number(jobId)));
