@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-rou
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, ApiError } from "../api/client";
-import type { ApiPolicy, JijiaAccount } from "../api/types";
+import type { ApiCatalogItem, ApiPolicy, JijiaAccount } from "../api/types";
 import { AccountPoliciesPage } from "./AccountPoliciesPage";
 
 const authState = vi.hoisted(() => ({
@@ -25,6 +25,7 @@ vi.mock("../api/client", async (importOriginal) => {
     api: {
       ...original.api,
       getAccount: vi.fn(),
+      getApiCatalog: vi.fn(),
       listPolicies: vi.fn(),
       updatePolicy: vi.fn(),
       batchUpdatePolicies: vi.fn(),
@@ -75,6 +76,10 @@ const secondPolicy: ApiPolicy = {
   accountId: 9,
   name: "欧洲流量数据",
 };
+const catalogItem: ApiCatalogItem = {
+  ...policy,
+  officialDomain: null,
+};
 
 async function chooseSelectOption(
   user: ReturnType<typeof userEvent.setup>,
@@ -90,6 +95,7 @@ describe("账号接口策略页", () => {
     vi.clearAllMocks();
     authState.role = "operator";
     vi.mocked(api.getAccount).mockResolvedValue(account);
+    vi.mocked(api.getApiCatalog).mockResolvedValue([catalogItem]);
     vi.mocked(api.listPolicies).mockResolvedValue([policy]);
     vi.mocked(api.updatePolicy).mockImplementation(async (_accountId, _apiCode, input) => ({
       ...policy,
@@ -402,6 +408,29 @@ describe("账号接口策略页", () => {
     await user.click(screen.getByRole("button", { name: "未启用 1" }));
     expect(screen.getByText("当前不可运行")).toBeInTheDocument();
     expect(screen.getByText("启用后可发起同步")).toBeInTheDocument();
+  });
+
+  it("与接口中心统一使用官方业务域，并在保存策略后保持分类", async () => {
+    vi.mocked(api.getApiCatalog).mockResolvedValue([{ ...catalogItem, officialDomain: "统计" }]);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/accounts/8/policies"]}>
+        <Routes>
+          <Route path="/accounts/:accountId/policies" element={<AccountPoliciesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "统计" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "运营管理" })).not.toBeInTheDocument();
+    await chooseSelectOption(user, "按业务域筛选", "统计");
+    expect(screen.getByText("当前显示 1 / 1")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "保存策略" }));
+
+    expect(await screen.findByText("“流量数据-ASIN”策略已保存。")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "统计" })).toBeInTheDocument();
+    expect(api.getApiCatalog).toHaveBeenCalledWith(8);
   });
 
   it("展示平台停用接口但禁止账号启用", async () => {

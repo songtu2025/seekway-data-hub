@@ -158,14 +158,29 @@ export type SyncJobStatus =
   | "stopped";
 
 export type SyncTaskStatus =
-  "in_progress" | "pausing" | "paused" | "attention" | "success" | "terminated";
+  | "in_progress"
+  | "pausing"
+  | "paused"
+  | "attention"
+  | "success"
+  | "caught_up"
+  | "terminated"
+  | "dismissed";
 
 export type ChangeCatchupStatus =
   "pending" | "running" | "complete" | "incremental_ready" | "blocked" | "failed";
 
 export type SyncJobType = "history_backfill" | "update_incremental" | "sync";
 export type SyncJobTriggerType = "manual" | "retry" | "schedule";
-export type SyncJobAction = "cancel" | "pause" | "withdraw_pause" | "resume" | "stop" | "retry";
+export type SyncJobAction =
+  | "cancel"
+  | "pause"
+  | "withdraw_pause"
+  | "resume"
+  | "stop"
+  | "retry"
+  | "dismiss"
+  | "restore_attention";
 
 export interface HistoryProgress {
   completedWindows: number;
@@ -220,6 +235,8 @@ export interface SyncJob {
   finishedAt?: string | null;
   errorCode?: string | null;
   errorMessage?: string | null;
+  resolutionCode?: "incremental_caught_up" | "operator_dismissed" | null;
+  resolvedAt?: string | null;
   historyProgress?: HistoryProgress | null;
   progressSummary?: {
     currentPage: number | null;
@@ -270,6 +287,9 @@ export interface SyncJob {
       | "paused"
       | "stop_requested"
       | "cancelled"
+      | "resolved"
+      | "dismissed"
+      | "attention_restored"
       | "finished";
     occurredAt: string;
     actorName: string | null;
@@ -407,6 +427,8 @@ export interface SyncJobPreview {
 export interface JobAcceptedResponse {
   jobId: number | string;
   taskNo?: string | null;
+  outcome?: "queued" | "already_caught_up";
+  taskStatus?: SyncTaskStatus;
 }
 
 export interface JobCancelledResponse extends JobAcceptedResponse {

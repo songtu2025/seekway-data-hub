@@ -385,6 +385,18 @@ export const api = {
       { method: "POST" },
       csrfToken,
     ),
+  dismissSyncJobAttention: (jobId: number | string, csrfToken: string) =>
+    request<JobCancelledResponse>(
+      `/api/v1/sync-jobs/${encodeURIComponent(String(jobId))}/dismiss`,
+      { method: "POST" },
+      csrfToken,
+    ),
+  restoreSyncJobAttention: (jobId: number | string, csrfToken: string) =>
+    request<JobCancelledResponse>(
+      `/api/v1/sync-jobs/${encodeURIComponent(String(jobId))}/restore-attention`,
+      { method: "POST" },
+      csrfToken,
+    ),
   cancelSyncJob: (jobId: number | string, csrfToken: string) =>
     request<JobCancelledResponse>(
       `/api/v1/sync-jobs/${encodeURIComponent(String(jobId))}/cancel`,
@@ -417,6 +429,14 @@ export const api = {
     ),
   retrySyncTask: (taskNo: string, csrfToken: string) =>
     request<JobAcceptedResponse>(syncTaskPath(taskNo, "retry"), { method: "POST" }, csrfToken),
+  dismissSyncTaskAttention: (taskNo: string, csrfToken: string) =>
+    request<JobCancelledResponse>(syncTaskPath(taskNo, "dismiss"), { method: "POST" }, csrfToken),
+  restoreSyncTaskAttention: (taskNo: string, csrfToken: string) =>
+    request<JobCancelledResponse>(
+      syncTaskPath(taskNo, "restore-attention"),
+      { method: "POST" },
+      csrfToken,
+    ),
   cancelSyncTask: (taskNo: string, csrfToken: string) =>
     request<JobCancelledResponse>(syncTaskPath(taskNo, "cancel"), { method: "POST" }, csrfToken),
   pauseSyncTask: (taskNo: string, csrfToken: string) =>

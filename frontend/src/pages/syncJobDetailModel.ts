@@ -32,6 +32,20 @@ function queueReasonMessage(
 }
 
 export function jobActionGuidance(job: SyncJob): JobActionGuidance {
+  if (job.taskStatus === "dismissed") {
+    return {
+      title: "此失败提醒已忽略",
+      description: "原失败执行和诊断证据仍保留；需要再次处理时，可恢复关注。",
+      tone: "neutral",
+    };
+  }
+  if (job.taskStatus === "caught_up") {
+    return {
+      title: "当前数据已追平",
+      description: "无需再次同步；原失败执行记录仍保留，可继续查看诊断和批次数据。",
+      tone: "success",
+    };
+  }
   if (job.status === "queued") {
     return {
       title: "等待执行服务领取",

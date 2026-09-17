@@ -11,6 +11,15 @@ const businessDomainNames: Record<string, string> = {
   other: "其他业务",
 };
 
+interface BusinessDomainSource {
+  domain: string;
+  officialDomain?: string | null;
+}
+
+export function businessDomainKey(item: BusinessDomainSource): string {
+  return item.officialDomain?.trim() || item.domain;
+}
+
 export function businessDomainLabel(domain: string): string {
   return businessDomainNames[domain] ?? (/[\u3400-\u9fff]/.test(domain) ? domain : "未分类业务");
 }

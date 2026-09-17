@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { Alert, Button, Checkbox, Tag } from "antd";
+import { Button, Checkbox, Tag } from "antd";
 import { Link, useLocation } from "react-router-dom";
 import type {
   ApiPolicy,
@@ -8,7 +8,7 @@ import type {
   ScheduleMode,
 } from "../api/types";
 import { buildPolicyUpdate } from "../policyUtils";
-import { businessDomainLabel } from "../businessDomains";
+import { businessDomainKey, businessDomainLabel } from "../businessDomains";
 import { formatDate, getReturnNavigation } from "../pages/m3Utils";
 
 const scheduleNames: Record<ScheduleMode, string> = {
@@ -69,12 +69,14 @@ export function PolicyDomainGroup({
         const isSelected = selectionOnly ? checked : selectedCode === policy.apiCode;
         const selectionDisabled = busy || !policy.catalogEnabled;
         const rowContent = (
-          <>
+          <span className="policy-row-grid">
             <span className="policy-row-main">
               <strong>{policy.name}</strong>
               <small>{policy.apiCode}</small>
             </span>
-            <span className="policy-row-domain">{businessDomainLabel(policy.domain)}</span>
+            <span className="policy-row-domain">
+              {businessDomainLabel(businessDomainKey(policy))}
+            </span>
             <Tag className={`badge ${policy.enabled ? "status-active" : "status-disabled"}`}>
               {!policy.catalogEnabled
                 ? "平台停用"
@@ -90,7 +92,7 @@ export function PolicyDomainGroup({
               {scheduleNames[policy.scheduleMode]}
               {policy.scheduleExpr ? ` · ${policy.scheduleExpr}` : ""}
             </span>
-          </>
+          </span>
         );
         return (
           <div
@@ -251,10 +253,12 @@ function PolicyEditor({
             {canEdit ? "设置定时计划" : "查看定时计划"}
           </Link>
           {!policy.enabled && enabled && policy.scheduleMode !== "manual_only" ? (
-            <p>启用后将恢复该接口原有的定时设置。</p>
+            <p className="policy-editor-change-note">启用后将恢复该接口原有的定时设置。</p>
           ) : null}
           {policy.enabled && !enabled ? (
-            <p>停用后不能创建新任务，正在执行的任务不受影响，原周期和时间会保留。</p>
+            <p className="policy-editor-change-note">
+              停用后不能创建新任务，正在执行的任务不受影响，原周期和时间会保留。
+            </p>
           ) : null}
           <p>
             日期窗口：
@@ -291,12 +295,6 @@ function PolicyEditor({
           <dd>{policy.nextRunAt ? formatDate(policy.nextRunAt, policy.timezone) : "无自动计划"}</dd>
         </dl>
       </details>
-      <Alert
-        className="policy-notice"
-        role="note"
-        title="官方路径、分页、限流和主键规则只读，不会被账号配置覆盖。"
-        type="info"
-      />
       {canEdit ? (
         <div className="policy-actions">
           <Button

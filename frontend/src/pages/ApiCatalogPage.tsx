@@ -7,7 +7,7 @@ import type { ApiCatalogItem, ApiPolicy, JijiaAccount, OfficialApiCatalogItem } 
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
-import { businessDomainLabel } from "../businessDomains";
+import { businessDomainKey, businessDomainLabel } from "../businessDomains";
 import { buildPolicyUpdate } from "../policyUtils";
 import { ConnectedCatalogDetail, OfficialCatalogDetail } from "./ApiCatalogDetails";
 import { formatDate, getApiErrorMessage, statusLabel } from "./m3Utils";
@@ -40,11 +40,8 @@ function matchesStatus(item: ApiCatalogItem, status: string) {
 function officialDomain(item: OfficialApiCatalogItem) {
   return item.menuPath.split(/\s*>\s*/)[0] || "未分类";
 }
-function connectedDomain(item: ApiCatalogItem) {
-  return item.officialDomain?.trim() || item.domain;
-}
 function matchesConnectedDomain(item: ApiCatalogItem, domain: string) {
-  return !domain || connectedDomain(item) === domain || item.domain === domain;
+  return !domain || businessDomainKey(item) === domain || item.domain === domain;
 }
 
 export function ApiCatalogPage() {
@@ -305,7 +302,7 @@ export function ApiCatalogPage() {
   const visibleConnected = currentConnected.filter(
     (item) =>
       (!keyword ||
-        `${item.name} ${item.apiCode} ${item.path} ${item.domain} ${connectedDomain(item)} ${businessDomainLabel(connectedDomain(item))}`
+        `${item.name} ${item.apiCode} ${item.path} ${item.domain} ${businessDomainKey(item)} ${businessDomainLabel(businessDomainKey(item))}`
           .toLocaleLowerCase()
           .includes(keyword)) &&
       matchesConnectedDomain(item, domain) &&
@@ -329,7 +326,7 @@ export function ApiCatalogPage() {
       : undefined;
   const domains = [
     ...new Set(
-      view === "connected" ? currentConnected.map(connectedDomain) : official.map(officialDomain),
+      view === "connected" ? currentConnected.map(businessDomainKey) : official.map(officialDomain),
     ),
   ].sort();
   const selected = selectedConnected ?? selectedOfficial;
@@ -445,7 +442,7 @@ export function ApiCatalogPage() {
       title: "业务域",
       key: "domain",
       width: 100,
-      render: (_, item) => businessDomainLabel(connectedDomain(item)),
+      render: (_, item) => businessDomainLabel(businessDomainKey(item)),
     },
     {
       title: "平台状态",

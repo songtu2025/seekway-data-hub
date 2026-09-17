@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Path, Query, Request, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from backend.app.api.deps import AuthContext, get_auth_context, require_operator_csrf
@@ -14,9 +14,12 @@ from backend.app.services.api_policy_service import catalog_by_code
 from backend.app.services.scheduled_plan_service import list_scheduled_plans
 from backend.app.services.sync_job_read_service import lifecycle_events
 from backend.app.services.sync_job_service import (
+    RetryJobOutcome,
+    RetryJobResult,
     cancel_job,
     create_manual_job,
     current_task_job,
+    dismiss_job_attention,
     get_job,
     get_task,
     job_data,
@@ -25,6 +28,7 @@ from backend.app.services.sync_job_service import (
     market_options,
     preview_manual_job,
     request_pause_job,
+    restore_job_attention,
     resume_job,
     retry_job,
     stop_job,
@@ -40,7 +44,7 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
 WebConfig = Annotated[WebSettings, Depends(get_web_settings)]
 AuthenticatedContext = Annotated[AuthContext, Depends(get_auth_context)]
 OperatorContext = Annotated[AuthContext, Depends(require_operator_csrf)]
-TaskAction = Literal["pause", "withdraw_pause", "resume", "stop", "cancel", "retry"]
+TaskAction = Literal["pause", "withdraw_pause", "resume", "stop", "cancel"]
 
 
 def _job_detail_data(
@@ -95,9 +99,7 @@ def _perform_task_action(
     if action == "cancel":
         return cancel_job(db, current.id, actor_id, request_id)
     assert settings is not None
-    if action == "resume":
-        return resume_job(db, current.id, actor_id, request_id, settings)
-    return retry_job(db, current.id, actor_id, request_id, settings)
+    return resume_job(db, current.id, actor_id, request_id, settings)
 
 
 def _task_action_response(
@@ -122,7 +124,7 @@ def _accepted_task_action_response(
     task_no: str,
     context: AuthContext,
     settings: WebSettings,
-    action: Literal["resume", "retry"],
+    action: Literal["resume"],
 ) -> dict[str, object]:
     """执行会创建新记录的任务操作并返回 202 响应体。"""
     job = _perform_task_action(
@@ -134,6 +136,23 @@ def _accepted_task_action_response(
         settings,
     )
     return _task_action_response(request, job, include_status=False)
+
+
+def _retry_action_response(
+    request: Request,
+    response: Response,
+    result: RetryJobResult,
+) -> dict[str, object]:
+    """按重试业务结果返回真实 HTTP 语义。"""
+    data: dict[str, object] = {
+        "outcome": result.outcome.value,
+        "jobId": result.job.id,
+        "taskNo": result.job.task_no or result.job.job_no,
+    }
+    if result.outcome == RetryJobOutcome.ALREADY_CAUGHT_UP:
+        response.status_code = status.HTTP_200_OK
+        data["taskStatus"] = "caught_up"
+    return success_response(request, data)
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
@@ -289,11 +308,44 @@ def cancel_sync_task(
 def retry_sync_task(
     task_no: TaskNumber,
     request: Request,
+    response: Response,
     db: DatabaseSession,
     settings: WebConfig,
     context: OperatorContext,
 ) -> dict[str, object]:
-    return _accepted_task_action_response(request, db, task_no, context, settings, "retry")
+    current = current_task_job(db, task_no, for_update=True)
+    result = retry_job(
+        db,
+        current.id,
+        context.user.id,
+        request.state.request_id,
+        settings,
+    )
+    return _retry_action_response(request, response, result)
+
+
+@router.post("/tasks/{task_no}/dismiss")
+def dismiss_sync_task_attention(
+    task_no: TaskNumber,
+    request: Request,
+    db: DatabaseSession,
+    context: OperatorContext,
+) -> dict[str, object]:
+    current = current_task_job(db, task_no, for_update=True)
+    job = dismiss_job_attention(db, current.id, context.user.id, request.state.request_id)
+    return _task_action_response(request, job, include_status=True)
+
+
+@router.post("/tasks/{task_no}/restore-attention")
+def restore_sync_task_attention(
+    task_no: TaskNumber,
+    request: Request,
+    db: DatabaseSession,
+    context: OperatorContext,
+) -> dict[str, object]:
+    current = current_task_job(db, task_no, for_update=True)
+    job = restore_job_attention(db, current.id, context.user.id, request.state.request_id)
+    return _task_action_response(request, job, include_status=True)
 
 
 @router.post("/{job_id}/pause")
@@ -415,15 +467,38 @@ def get_sync_job(
 def retry_sync_job(
     job_id: int,
     request: Request,
+    response: Response,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[WebSettings, Depends(get_web_settings)],
     context: Annotated[AuthContext, Depends(require_operator_csrf)],
 ) -> dict[str, object]:
-    job = retry_job(
+    result = retry_job(
         db,
         job_id,
         context.user.id,
         request.state.request_id,
         settings,
     )
-    return success_response(request, {"jobId": job.id})
+    return _retry_action_response(request, response, result)
+
+
+@router.post("/{job_id}/dismiss")
+def dismiss_sync_job_attention(
+    job_id: int,
+    request: Request,
+    db: DatabaseSession,
+    context: OperatorContext,
+) -> dict[str, object]:
+    job = dismiss_job_attention(db, job_id, context.user.id, request.state.request_id)
+    return success_response(request, {"jobId": job.id, "status": job.status})
+
+
+@router.post("/{job_id}/restore-attention")
+def restore_sync_job_attention(
+    job_id: int,
+    request: Request,
+    db: DatabaseSession,
+    context: OperatorContext,
+) -> dict[str, object]:
+    job = restore_job_attention(db, job_id, context.user.id, request.state.request_id)
+    return success_response(request, {"jobId": job.id, "status": job.status})

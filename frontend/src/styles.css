@@ -2058,7 +2058,7 @@ a:focus-visible {
   outline-offset: var(--space-1);
 }
 .policy-table-head,
-.policy-row {
+.policy-row-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(75px, 0.45fr) minmax(80px, 0.45fr) minmax(
       120px,
@@ -2121,13 +2121,19 @@ a:focus-visible {
   box-shadow: inset 3px 0 0 var(--brand-action);
 }
 .policy-row {
+  display: block;
   width: 100%;
+  height: auto;
   min-height: 56px;
   border: 0;
   padding: 0 16px;
   color: var(--text);
   background: transparent;
   text-align: left;
+}
+.policy-row > span,
+.policy-row-grid {
+  width: 100%;
 }
 .policy-select-row {
   display: grid;
@@ -2155,7 +2161,7 @@ a:focus-visible {
 .policy-select-item.selected > .policy-select-row {
   background: var(--brand-soft);
 }
-.policy-row > span:first-child {
+.policy-row-main {
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -2256,18 +2262,29 @@ a:focus-visible {
   color: var(--text-muted);
 }
 .policy-editor-section {
-  margin-top: 16px;
+  margin-top: 12px;
   border-top: 1px solid var(--border);
-  padding-top: 16px;
+  padding-top: 12px;
 }
 .policy-editor-section h3 {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-size: 14px;
 }
 .policy-editor-fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
-  gap: 12px;
+  align-items: center;
+  gap: 8px 20px;
+}
+.policy-editor-fields > p {
+  margin: 0;
+  line-height: 20px;
+}
+.policy-editor-fields > a {
+  justify-self: start;
+}
+.policy-editor-fields > .policy-editor-change-note {
+  grid-column: 1 / -1;
 }
 .policy-editor-fields > label {
   display: grid;
@@ -2293,15 +2310,6 @@ a:focus-visible {
   margin: 0;
   border-top: 1px solid var(--color-border-soft);
   padding: 14px;
-}
-.policy-notice {
-  margin-top: 14px;
-  border-radius: 8px;
-  padding: 12px 14px;
-  color: var(--color-warning-text);
-  background: var(--color-warning-subtle);
-  font-size: 12px;
-  line-height: 19px;
 }
 .policy-actions {
   justify-content: flex-end;
@@ -2888,6 +2896,7 @@ a:focus-visible {
   white-space: nowrap;
 }
 .m3-status--success,
+.m3-status--caught_up,
 .m3-status--complete {
   color: var(--color-success);
   background: var(--color-success-subtle);
@@ -2912,7 +2921,8 @@ a:focus-visible {
   color: var(--color-warning-text);
   background: var(--color-warning-subtle);
 }
-.m3-status--terminated {
+.m3-status--terminated,
+.m3-status--dismissed {
   color: var(--text-muted);
   background: var(--surface-muted);
 }
@@ -3444,10 +3454,6 @@ a:focus-visible {
   color: var(--text-muted);
   font-size: 12px;
 }
-.dashboard-inbox-meta time {
-  padding-left: 14px;
-  border-left: 1px solid var(--border);
-}
 .dashboard-refresh {
   min-width: 52px;
 }
@@ -3642,11 +3648,6 @@ a:focus-visible {
   font-size: clamp(23px, 2.2vw, 30px);
   line-height: 1.2;
   letter-spacing: -0.025em;
-}
-.dashboard-focus-detail > header p {
-  margin: 12px 0 0;
-  color: var(--text-muted);
-  font-size: 12px;
 }
 .dashboard-focus-copy {
   margin-top: 14px;
@@ -4212,6 +4213,33 @@ a:focus-visible {
   .policy-toolbar .ant-select {
     width: 100%;
   }
+  .policy-table-head {
+    display: none;
+  }
+  .policy-row-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+  .policy-row {
+    min-height: 72px;
+    padding: 12px 14px;
+  }
+  .policy-row-domain,
+  .policy-row-schedule {
+    justify-self: end;
+    text-align: right;
+  }
+  .policy-select-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+    padding-left: 10px;
+  }
+  .policy-select-row--read-only {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 0;
+  }
+  .policy-inline-editor {
+    margin: 0 10px 12px;
+  }
   .onboarding-inspector {
     position: static;
   }
@@ -4633,33 +4661,11 @@ a:focus-visible {
   .policy-summary strong {
     font-size: 11px;
   }
-  .policy-table-head {
-    display: none;
-  }
-  .policy-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px 12px;
-    padding: 13px 14px;
-  }
-  .policy-row-domain {
-    justify-self: end;
-  }
   .policy-row-schedule {
     grid-column: 1 / -1;
   }
   .policy-domain-heading {
     padding: 0 14px;
-  }
-  .policy-select-row {
-    grid-template-columns: 28px minmax(0, 1fr);
-    padding-left: 10px;
-  }
-  .policy-select-row--read-only {
-    grid-template-columns: minmax(0, 1fr);
-    padding-left: 0;
-  }
-  .policy-inline-editor {
-    margin: 0 10px 12px;
   }
   .policy-editor {
     padding: 16px;
@@ -5046,10 +5052,6 @@ a:focus-visible {
     width: 100%;
     flex-wrap: wrap;
     gap: 10px;
-  }
-  .dashboard-inbox-meta time {
-    margin-left: auto;
-    padding-left: 10px;
   }
   .dashboard-metrics > a {
     min-height: 96px;

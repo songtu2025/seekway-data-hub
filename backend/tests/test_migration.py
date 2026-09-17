@@ -25,6 +25,7 @@ SYNC_JOB_CONTROL_COLUMNS = {
     "pause_requested_at",
     "paused_at",
 }
+SYNC_JOB_RESOLUTION_COLUMNS = {"resolution_code", "resolved_at"}
 
 
 def _run_migration_action(
@@ -161,6 +162,29 @@ def test_alembic_revision_ids_fit_version_table_column() -> None:
     assert {revision.revision for revision in revisions if len(revision.revision) > 32} == set()
 
 
+def test_0010_adds_and_removes_resolution_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """0010 只增加可空解决状态字段，并提供对应回滚。"""
+    _, upgrade_batch = _run_migration_action(
+        monkeypatch,
+        "0010_sync_job_resolution",
+        "upgrade",
+        (8, 0, 36),
+    )
+    assert {call.args[0].name for call in upgrade_batch.add_column.call_args_list} == (
+        SYNC_JOB_RESOLUTION_COLUMNS
+    )
+
+    _, downgrade_batch = _run_migration_action(
+        monkeypatch,
+        "0010_sync_job_resolution",
+        "downgrade",
+        (8, 0, 36),
+    )
+    assert {call.args[0] for call in downgrade_batch.drop_column.call_args_list} == (
+        SYNC_JOB_RESOLUTION_COLUMNS
+    )
+
+
 def test_identity_and_account_migrations_on_empty_database(tmp_path: Path) -> None:
     """空库可以完成身份域迁移并保留同步域表。"""
     database_path = tmp_path / "identity.db"
@@ -216,6 +240,8 @@ def test_identity_and_account_migrations_on_empty_database(tmp_path: Path) -> No
         "api_config_version",
         "api_config_hash",
         "api_config_snapshot_json",
+        "resolution_code",
+        "resolved_at",
     }.issubset(job_columns)
     audit_columns = {column["name"] for column in inspector.get_columns("audit_log")}
     assert {"resource_type", "resource_id", "result", "changes_json"}.issubset(audit_columns)

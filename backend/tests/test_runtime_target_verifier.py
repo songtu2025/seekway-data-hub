@@ -103,9 +103,7 @@ API_RATE_LIMIT_COLUMN_ROWS = {
 
 
 def test_expected_alembic_head_matches_migration_and_storage_limit() -> None:
-    migration = importlib.import_module(
-        "backend.migrations.versions.0009_sync_job_task_execution_index"
-    )
+    migration = importlib.import_module("backend.migrations.versions.0010_sync_job_resolution")
 
     assert EXPECTED_ALEMBIC_HEAD == migration.revision
     assert len(EXPECTED_ALEMBIC_HEAD) <= 32
@@ -363,7 +361,7 @@ class FakeEngine:
 
 
 def test_runtime_target_verifier_passes_with_read_only_queries() -> None:
-    connection = FakeConnection(heads=["0009_sync_job_task_index"])
+    connection = FakeConnection(heads=["0010_sync_job_resolution"])
 
     result = verify_runtime_target(FakeEngine(connection))
 

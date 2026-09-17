@@ -1,6 +1,7 @@
 import hashlib
 import json
 import secrets
+from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
@@ -16,7 +17,11 @@ from backend.app.core.errors import ApiError
 from backend.app.core.security import utc_now
 from backend.app.models.account_api_policy import AccountApiPolicy
 from backend.app.models.jijia_account import JijiaAccount, JijiaAccountStatus
-from backend.app.models.sync_job import SyncJob
+from backend.app.models.sync_job import (
+    SYNC_JOB_RESOLUTION_CAUGHT_UP,
+    SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED,
+    SyncJob,
+)
 from backend.app.models.sync_records import (
     raw_api_data_table,
     sync_api_log_table,
@@ -66,11 +71,20 @@ RETRYABLE_JOB_STATUSES = ("failed", "partial_failed")
 TASK_STATUS_GROUPS = {
     "active": ("in_progress", "pausing"),
     "attention": ("paused", "attention"),
-    "success": ("success",),
-    "ended": ("terminated",),
+    "success": ("success", "caught_up"),
+    "ended": ("terminated", "dismissed"),
 }
 LOGICAL_TASK_STATUSES = frozenset(
-    {"in_progress", "pausing", "paused", "attention", "success", "terminated"}
+    {
+        "in_progress",
+        "pausing",
+        "paused",
+        "attention",
+        "success",
+        "caught_up",
+        "terminated",
+        "dismissed",
+    }
 )
 
 
@@ -80,6 +94,21 @@ class ScheduledJobOutcome(StrEnum):
     CREATED = "created"
     EXISTING = "existing"
     BLOCKED = "blocked"
+
+
+class RetryJobOutcome(StrEnum):
+    """区分实际入队和检查点已覆盖的幂等结果。"""
+
+    QUEUED = "queued"
+    ALREADY_CAUGHT_UP = "already_caught_up"
+
+
+@dataclass(frozen=True)
+class RetryJobResult:
+    """返回重试动作的业务结果及对应执行记录。"""
+
+    outcome: RetryJobOutcome
+    job: SyncJob
 
 
 def task_window_progress(job: SyncJob) -> tuple[int, int]:
@@ -101,6 +130,10 @@ def task_window_progress(job: SyncJob) -> tuple[int, int]:
 
 def task_status(job: SyncJob) -> str:
     """把当前执行状态折叠为面向用户的逻辑任务状态。"""
+    if job.resolution_code == SYNC_JOB_RESOLUTION_CAUGHT_UP:
+        return "caught_up"
+    if job.resolution_code == SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED:
+        return "dismissed"
     if job.status in {"queued", "running"}:
         return "in_progress"
     if job.status == "pause_requested":
@@ -175,6 +208,8 @@ def job_data(
         "finishedAt": utc_iso(job.finished_at),
         "errorCode": job.error_code,
         "errorMessage": job.error_message,
+        "resolutionCode": job.resolution_code,
+        "resolvedAt": utc_iso(job.resolved_at),
         "historyProgress": public_history_progress(job.progress_json),
         "progressSummary": progress_summary(
             job,
@@ -386,13 +421,17 @@ def retry_job(
     actor_id: int,
     request_id: str,
     settings: WebSettings,
-) -> SyncJob:
+) -> RetryJobResult:
     """失败任务重试会创建新任务，保留旧任务作为不可变执行证据。"""
-    original = db.get(SyncJob, job_id)
+    original = db.get(SyncJob, job_id, with_for_update=True)
     if original is None:
         raise ApiError(404, "SYNC_JOB_NOT_FOUND", "同步任务不存在")
     if original.status not in RETRYABLE_JOB_STATUSES:
         raise ApiError(409, "SYNC_JOB_NOT_RETRYABLE", "只有失败任务可以重试")
+    if original.resolution_code == SYNC_JOB_RESOLUTION_CAUGHT_UP:
+        return RetryJobResult(RetryJobOutcome.ALREADY_CAUGHT_UP, original)
+    if original.resolution_code is not None:
+        raise ApiError(409, "SYNC_JOB_RESOLVED", "请先恢复关注后再重试任务")
     if not original.api_code:
         raise ApiError(409, "SYNC_JOB_API_MISSING", "任务缺少接口标识")
     account, policy, api = _eligible_target(
@@ -409,12 +448,32 @@ def retry_job(
             progress=json_object(original.progress_json) or None,
         )
     else:
-        window_plan = _job_window(
-            db,
-            account,
-            policy,
-            api,
-        )
+        try:
+            window_plan = _job_window(
+                db,
+                account,
+                policy,
+                api,
+            )
+        except ApiError as error:
+            if error.code != "INCREMENTAL_CAUGHT_UP":
+                raise
+            original.resolution_code = SYNC_JOB_RESOLUTION_CAUGHT_UP
+            original.resolved_at = utc_now()
+            add_audit_log(
+                db,
+                actor_user_id=actor_id,
+                jijia_account_id=original.jijia_account_id,
+                action="sync_job.retry_noop",
+                resource_type="sync_job",
+                resource_id=original.id,
+                request_id=request_id,
+                result="success",
+                changes={"resolutionCode": SYNC_JOB_RESOLUTION_CAUGHT_UP},
+            )
+            db.commit()
+            db.refresh(original)
+            return RetryJobResult(RetryJobOutcome.ALREADY_CAUGHT_UP, original)
     if window_plan.job_type == original.job_type and window_plan.start == original.window_start:
         window_plan = WindowPlan(
             job_type=window_plan.job_type,
@@ -462,6 +521,70 @@ def retry_job(
         request_id=request_id,
         result="success",
         changes={"retryOfJobId": original.id},
+    )
+    db.commit()
+    db.refresh(job)
+    return RetryJobResult(RetryJobOutcome.QUEUED, job)
+
+
+def dismiss_job_attention(
+    db: Session,
+    job_id: int,
+    actor_id: int,
+    request_id: str,
+) -> SyncJob:
+    """忽略失败提醒，但保留失败执行及诊断证据。"""
+    job = db.get(SyncJob, job_id, with_for_update=True)
+    if job is None:
+        raise ApiError(404, "SYNC_JOB_NOT_FOUND", "同步任务不存在")
+    if job.resolution_code == SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED:
+        return job
+    if job.status not in RETRYABLE_JOB_STATUSES or job.resolution_code is not None:
+        raise ApiError(409, "SYNC_JOB_NOT_DISMISSIBLE", "只有待处理的失败任务可以忽略提醒")
+    job.resolution_code = SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED
+    job.resolved_at = utc_now()
+    add_audit_log(
+        db,
+        actor_user_id=actor_id,
+        jijia_account_id=job.jijia_account_id,
+        action="sync_job.dismiss",
+        resource_type="sync_job",
+        resource_id=job.id,
+        request_id=request_id,
+        result="success",
+        changes={"resolutionCode": SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED},
+    )
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def restore_job_attention(
+    db: Session,
+    job_id: int,
+    actor_id: int,
+    request_id: str,
+) -> SyncJob:
+    """恢复被人工忽略的失败提醒。"""
+    job = db.get(SyncJob, job_id, with_for_update=True)
+    if job is None:
+        raise ApiError(404, "SYNC_JOB_NOT_FOUND", "同步任务不存在")
+    if job.resolution_code is None:
+        return job
+    if job.resolution_code != SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED:
+        raise ApiError(409, "SYNC_JOB_NOT_RESTORABLE", "当前任务不能恢复关注")
+    job.resolution_code = None
+    job.resolved_at = None
+    add_audit_log(
+        db,
+        actor_user_id=actor_id,
+        jijia_account_id=job.jijia_account_id,
+        action="sync_job.restore_attention",
+        resource_type="sync_job",
+        resource_id=job.id,
+        request_id=request_id,
+        result="success",
+        changes={"resolutionCode": None},
     )
     db.commit()
     db.refresh(job)
@@ -933,6 +1056,11 @@ def _task_status_column() -> Any:
         SyncJob.window_index >= SyncJob.total_windows,
     )
     return case(
+        (SyncJob.resolution_code == SYNC_JOB_RESOLUTION_CAUGHT_UP, "caught_up"),
+        (
+            SyncJob.resolution_code == SYNC_JOB_RESOLUTION_OPERATOR_DISMISSED,
+            "dismissed",
+        ),
         (SyncJob.status.in_(("queued", "running")), "in_progress"),
         (SyncJob.status == "pause_requested", "pausing"),
         (SyncJob.status == "paused", "paused"),

@@ -95,6 +95,9 @@ function lifecycleEventLabel(
     paused: "已在安全边界暂停",
     stop_requested: "已请求停止后续窗口",
     cancelled: "已取消排队任务",
+    resolved: "数据范围已由后续同步覆盖",
+    dismissed: "已忽略失败提醒",
+    attention_restored: "已恢复关注",
     finished: status ? `执行结束：${statusLabel(status)}` : "执行结束",
   };
   return labels[eventType];

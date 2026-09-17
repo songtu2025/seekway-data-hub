@@ -4,7 +4,7 @@ import type { TableColumnsType } from "antd";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { api } from "../api/client";
-import type { SyncJob } from "../api/types";
+import type { JobAcceptedResponse, SyncJob } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
@@ -47,12 +47,17 @@ export function SyncJobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [actionNotice, setActionNotice] = useState("");
   const [refreshNotice, setRefreshNotice] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const jobRef = useRef<SyncJob | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [controllingAction, setControllingAction] = useState<SyncJobControlAction | null>(null);
+  const [dispositionAction, setDispositionAction] = useState<
+    "dismiss" | "restore_attention" | null
+  >(null);
+  const [dismissConfirmOpen, setDismissConfirmOpen] = useState(false);
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<number | string | null>(requestedRunId);
   const [activeHistoryTab, setActiveHistoryTab] = useState<"executions" | "events">("executions");
@@ -144,9 +149,12 @@ export function SyncJobDetailPage() {
     jobRef.current = null;
     setLoading(true);
     setError("");
+    setActionNotice("");
     setRetrying(false);
     setCancelling(false);
     setControllingAction(null);
+    setDispositionAction(null);
+    setDismissConfirmOpen(false);
     setStopConfirmOpen(false);
     setSelectedRunId(null);
     setActiveHistoryTab("executions");
@@ -205,6 +213,36 @@ export function SyncJobDetailPage() {
     void loadJob(routeIdentifier, Boolean(routeTaskNo), generation, requestSequence, "manual");
   }
 
+  async function showAcceptedExecution(
+    accepted: JobAcceptedResponse,
+    fallbackTaskNo: string | undefined,
+    generation: number,
+  ) {
+    if (routeGenerationRef.current !== generation) return;
+    const acceptedTaskNo = accepted.taskNo ?? fallbackTaskNo;
+    if (accepted.outcome === "already_caught_up") {
+      setActionNotice(
+        "当前数据已追平，无需重试。原执行失败记录仍保留，相关数据范围已由后续同步覆盖。",
+      );
+      const requestSequence = ++requestSequenceRef.current;
+      await loadJob(
+        acceptedTaskNo ?? String(accepted.jobId),
+        Boolean(acceptedTaskNo),
+        generation,
+        requestSequence,
+      );
+      return;
+    }
+    if (acceptedTaskNo && acceptedTaskNo === routeTaskNo) {
+      const requestSequence = ++requestSequenceRef.current;
+      await loadJob(acceptedTaskNo, true, generation, requestSequence);
+      return;
+    }
+    navigate(acceptedJobDetailPath(accepted.jobId, acceptedTaskNo), {
+      state: location.state,
+    });
+  }
+
   async function retry() {
     if (!routeIdentifier || !csrfToken || !currentJob || !hasSyncJobAction(currentJob, "retry"))
       return;
@@ -212,14 +250,13 @@ export function SyncJobDetailPage() {
     const generation = routeGenerationRef.current;
     setRetrying(true);
     setError("");
+    setActionNotice("");
+    requestSequenceRef.current += 1;
     try {
       const accepted = currentJob.taskNo
         ? await api.retrySyncTask(currentJob.taskNo, csrfToken)
         : await api.retrySyncJob(targetId, csrfToken);
-      if (routeGenerationRef.current !== generation) return;
-      navigate(acceptedJobDetailPath(accepted.jobId, accepted.taskNo ?? currentJob.taskNo), {
-        state: location.state,
-      });
+      await showAcceptedExecution(accepted, currentJob.taskNo, generation);
     } catch (caught) {
       if (routeGenerationRef.current !== generation) return;
       setError(getApiErrorMessage(caught, "重试失败，请稍后重试"));
@@ -261,6 +298,52 @@ export function SyncJobDetailPage() {
     }
   }
 
+  async function updateDisposition(action: "dismiss" | "restore_attention") {
+    if (
+      !routeIdentifier ||
+      !csrfToken ||
+      !currentJob ||
+      dispositionAction !== null ||
+      !hasSyncJobAction(currentJob, action)
+    )
+      return;
+    const targetId = currentJob.taskNo ?? routeIdentifier;
+    const generation = routeGenerationRef.current;
+    setDispositionAction(action);
+    setError("");
+    setActionNotice("");
+    requestSequenceRef.current += 1;
+    try {
+      if (action === "dismiss") {
+        if (currentJob.taskNo) {
+          await api.dismissSyncTaskAttention(currentJob.taskNo, csrfToken);
+        } else {
+          await api.dismissSyncJobAttention(targetId, csrfToken);
+        }
+      } else if (currentJob.taskNo) {
+        await api.restoreSyncTaskAttention(currentJob.taskNo, csrfToken);
+      } else {
+        await api.restoreSyncJobAttention(targetId, csrfToken);
+      }
+      if (routeGenerationRef.current !== generation) return;
+      const requestSequence = ++requestSequenceRef.current;
+      await loadJob(targetId, Boolean(currentJob.taskNo), generation, requestSequence);
+      if (routeGenerationRef.current !== generation) return;
+      setDismissConfirmOpen(false);
+      setActionNotice(action === "dismiss" ? "已忽略此失败提醒" : "已恢复关注此失败任务");
+    } catch (caught) {
+      if (routeGenerationRef.current !== generation) return;
+      setError(
+        getApiErrorMessage(
+          caught,
+          action === "dismiss" ? "忽略提醒失败，请稍后重试" : "恢复关注失败，请稍后重试",
+        ),
+      );
+    } finally {
+      if (routeGenerationRef.current === generation) setDispositionAction(null);
+    }
+  }
+
   async function control(action: SyncJobControlAction) {
     if (!routeIdentifier || !csrfToken || !currentJob || controllingAction !== null) return;
     const backendAction = action === "withdraw" ? "withdraw_pause" : action;
@@ -286,11 +369,7 @@ export function SyncJobDetailPage() {
         const accepted = currentJob.taskNo
           ? await api.resumeSyncTask(currentJob.taskNo, csrfToken)
           : await api.resumeSyncJob(routeIdentifier, csrfToken);
-        if (routeGenerationRef.current === generation) {
-          navigate(acceptedJobDetailPath(accepted.jobId, accepted.taskNo ?? currentJob.taskNo), {
-            state: location.state,
-          });
-        }
+        await showAcceptedExecution(accepted, currentJob.taskNo, generation);
         return;
       }
       if (routeGenerationRef.current !== generation) return;
@@ -434,6 +513,11 @@ export function SyncJobDetailPage() {
           </div>
         ) : null}
         {loading && !currentJob ? <Spin description="正在加载任务详情…" /> : null}
+        {actionNotice ? (
+          <div aria-live="polite" role="status">
+            <Alert title={actionNotice} showIcon type="success" />
+          </div>
+        ) : null}
         {error ? (
           <Alert
             action={
@@ -490,12 +574,15 @@ export function SyncJobDetailPage() {
               canOperate={canOperate}
               cancelling={cancelling}
               controllingAction={controllingAction}
+              dispositionAction={dispositionAction}
               job={currentJob}
               rawDataPath={rawDataPath}
               retrying={retrying}
               onCancel={() => void cancel()}
               onControl={(action) => void control(action)}
+              onDismiss={() => setDismissConfirmOpen(true)}
               onRequestStop={() => setStopConfirmOpen(true)}
+              onRestoreAttention={() => void updateDisposition("restore_attention")}
               onRetry={() => void retry()}
               onShowDiagnostics={() => {
                 setActiveHistoryTab("executions");
@@ -599,6 +686,24 @@ export function SyncJobDetailPage() {
             </section>
           </>
         ) : null}
+        <Modal
+          cancelText="取消"
+          cancelButtonProps={{ disabled: dispositionAction === "dismiss" }}
+          confirmLoading={dispositionAction === "dismiss"}
+          destroyOnHidden
+          okText="确认忽略"
+          open={dismissConfirmOpen}
+          title="忽略失败提醒"
+          onCancel={() => setDismissConfirmOpen(false)}
+          onOk={() => void updateDisposition("dismiss")}
+        >
+          <Alert
+            description="忽略后，此任务不再计入概览告警和“需处理”列表；失败记录不会删除，可随时恢复关注。"
+            showIcon
+            title="确认忽略此提醒吗？"
+            type="warning"
+          />
+        </Modal>
         <Modal
           cancelText="取消"
           cancelButtonProps={{ disabled: controllingAction === "stop" }}

@@ -23,7 +23,7 @@ from backend.app.services.migration_0003_service import (
 )
 from backend.app.services.migration_preflight_service import PreflightResult
 
-EXPECTED_ALEMBIC_HEAD = "0009_sync_job_task_index"
+EXPECTED_ALEMBIC_HEAD = "0010_sync_job_resolution"
 
 
 def _model_index_specs(table: Table) -> dict[tuple[str, str], IndexSpec]:

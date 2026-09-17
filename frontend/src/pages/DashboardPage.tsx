@@ -172,7 +172,7 @@ export function DashboardPage() {
                 : summary.latestDataAt
                   ? {
                       title: "同步链路当前正常",
-                      description: `最近一次数据观察时间：${formatDate(summary.latestDataAt)}。`,
+                      description: `最近数据观察：${formatDate(summary.latestDataAt)}。`,
                       label: "验证最新数据",
                       to: "/raw-data",
                     }
@@ -202,7 +202,6 @@ export function DashboardPage() {
       (summary?.failedJobs ?? 0) > 0 ||
       (summary?.failedRequests ?? 0) > 0,
     );
-  const detectedAt = lastUpdatedAt ?? new Date();
   const showRuntimeItems = itemType === "all" || itemType === "runtime";
   const showProgressItems = itemType === "all" || itemType === "progress";
 
@@ -217,6 +216,7 @@ export function DashboardPage() {
               lastUpdatedAt={lastUpdatedAt}
               manualRefreshMessage={refreshNotice}
               refreshing={refreshing}
+              updatedLabel="页面更新于"
             />
             <Button
               aria-label="刷新"
@@ -228,9 +228,6 @@ export function DashboardPage() {
             >
               刷新
             </Button>
-            <time dateTime={formatCalendarDate(detectedAt)}>
-              {formatCalendarDate(detectedAt)}（今天）
-            </time>
           </div>
         </header>
         {error ? <Alert title={error} type={summary ? "warning" : "error"} /> : null}
@@ -276,11 +273,11 @@ export function DashboardPage() {
                 <small>{worker?.queueDepth ?? summary.queuedJobs} 个排队任务</small>
               </Link>
               <Link to="/raw-data">
-                <span className="dashboard-metric-label">最近数据</span>
+                <span className="dashboard-metric-label">最近数据观察</span>
                 <strong>
                   {summary.latestDataAt ? formatCompactDate(summary.latestDataAt) : "暂无"}
                 </strong>
-                <small>验证数据</small>
+                <small>原始数据最后观察时间</small>
               </Link>
             </section>
             <div className="dashboard-workspace">
@@ -368,7 +365,6 @@ export function DashboardPage() {
                     />
                     <div>
                       <h2 id="dashboard-focus-title">{selectedFocus.title}</h2>
-                      <p>检测时间：{formatClock(detectedAt).slice(0, 5)}</p>
                     </div>
                   </header>
                   <div className="dashboard-focus-copy">
@@ -398,10 +394,10 @@ export function DashboardPage() {
                           <dd>{summary.failedRequests}</dd>
                         </div>
                         <div>
-                          <dt>最新数据</dt>
+                          <dt>最近数据观察</dt>
                           <dd>
                             {summary.latestDataAt
-                              ? `${formatCompactDate(summary.latestDataAt)}（验证数据）`
+                              ? formatCompactDate(summary.latestDataAt)
                               : "暂无"}
                           </dd>
                         </div>
