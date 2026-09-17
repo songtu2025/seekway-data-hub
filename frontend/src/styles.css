@@ -2262,18 +2262,29 @@ a:focus-visible {
   color: var(--text-muted);
 }
 .policy-editor-section {
-  margin-top: 16px;
+  margin-top: 12px;
   border-top: 1px solid var(--border);
-  padding-top: 16px;
+  padding-top: 12px;
 }
 .policy-editor-section h3 {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-size: 14px;
 }
 .policy-editor-fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
-  gap: 12px;
+  align-items: center;
+  gap: 8px 20px;
+}
+.policy-editor-fields > p {
+  margin: 0;
+  line-height: 20px;
+}
+.policy-editor-fields > a {
+  justify-self: start;
+}
+.policy-editor-fields > .policy-editor-change-note {
+  grid-column: 1 / -1;
 }
 .policy-editor-fields > label {
   display: grid;
@@ -2299,15 +2310,6 @@ a:focus-visible {
   margin: 0;
   border-top: 1px solid var(--color-border-soft);
   padding: 14px;
-}
-.policy-notice {
-  margin-top: 14px;
-  border-radius: 8px;
-  padding: 12px 14px;
-  color: var(--color-warning-text);
-  background: var(--color-warning-subtle);
-  font-size: 12px;
-  line-height: 19px;
 }
 .policy-actions {
   justify-content: flex-end;
@@ -3452,10 +3454,6 @@ a:focus-visible {
   color: var(--text-muted);
   font-size: 12px;
 }
-.dashboard-inbox-meta time {
-  padding-left: 14px;
-  border-left: 1px solid var(--border);
-}
 .dashboard-refresh {
   min-width: 52px;
 }
@@ -3650,11 +3648,6 @@ a:focus-visible {
   font-size: clamp(23px, 2.2vw, 30px);
   line-height: 1.2;
   letter-spacing: -0.025em;
-}
-.dashboard-focus-detail > header p {
-  margin: 12px 0 0;
-  color: var(--text-muted);
-  font-size: 12px;
 }
 .dashboard-focus-copy {
   margin-top: 14px;
@@ -5059,10 +5052,6 @@ a:focus-visible {
     width: 100%;
     flex-wrap: wrap;
     gap: 10px;
-  }
-  .dashboard-inbox-meta time {
-    margin-left: auto;
-    padding-left: 10px;
   }
   .dashboard-metrics > a {
     min-height: 96px;

@@ -39,4 +39,12 @@ describe("RefreshStatus", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent("数据已刷新 · 上次检查 08:05:06");
   });
+
+  it("支持页面使用更明确的更新时间标签", () => {
+    render(
+      <RefreshStatus lastUpdatedAt={updatedAt} refreshing={false} updatedLabel="页面更新于" />,
+    );
+
+    expect(screen.getByText("页面更新于 08:05:06")).toBeVisible();
+  });
 });

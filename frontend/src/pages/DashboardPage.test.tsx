@@ -61,6 +61,7 @@ describe("同步概览", () => {
         status: "partial_failed",
         startedAt: "2026-08-26T02:00:00Z",
       },
+      latestDataAt: "2026-09-17T10:32:00Z",
       historyProgress: {
         completedWindows: 4,
         totalWindows: 79,
@@ -89,6 +90,9 @@ describe("同步概览", () => {
 
     expect(await screen.findByText("sync-016")).toBeInTheDocument();
     expect(api.getDashboard).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/页面更新于 \d{2}:\d{2}:\d{2}/)).toBeVisible();
+    expect(screen.queryByText(/当前日期/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/检测时间/)).not.toBeInTheDocument();
     expect(screen.queryByText("正在加载同步概览…")).not.toBeInTheDocument();
   });
 
@@ -108,6 +112,11 @@ describe("同步概览", () => {
       "href",
       "/jobs?group=attention",
     );
+    expect(
+      screen.getByRole("link", {
+        name: /最近数据观察.*原始数据最后观察时间/,
+      }),
+    ).toHaveAttribute("href", "/raw-data");
     expect(screen.getByText("4 / 79")).toBeInTheDocument();
     expect(screen.getByText("增量同步已追平")).toBeInTheDocument();
     expect(screen.getByText("2020-05-09")).toBeInTheDocument();
@@ -207,7 +216,7 @@ describe("同步概览", () => {
     fireEvent.click(screen.getByRole("button", { name: "刷新" }));
     await waitFor(() => expect(api.getDashboard).toHaveBeenCalledTimes(2));
     expect(screen.getByText("DASHBOARD-BASE")).toBeInTheDocument();
-    expect(screen.getByText(/正在刷新 · 上次检查/)).toBeVisible();
+    expect(screen.getByText(/正在刷新 · 页面更新于/)).toBeVisible();
     expect(screen.getByRole("button", { name: "刷新" })).toBeDisabled();
 
     await act(async () => {

@@ -3,6 +3,7 @@ interface RefreshStatusProps {
   lastUpdatedAt: Date | null;
   failedWithPreviousData?: boolean;
   manualRefreshMessage?: string;
+  updatedLabel?: string;
 }
 
 function formatRefreshTime(value: Date): string {
@@ -19,19 +20,20 @@ export function RefreshStatus({
   lastUpdatedAt,
   failedWithPreviousData = false,
   manualRefreshMessage = "",
+  updatedLabel = "上次检查",
 }: RefreshStatusProps) {
   const shouldAnnounce = refreshing || failedWithPreviousData || Boolean(manualRefreshMessage);
   const lastCheckedTime = lastUpdatedAt ? formatRefreshTime(lastUpdatedAt) : "";
   const label = refreshing
     ? lastCheckedTime
-      ? `正在刷新 · 上次检查 ${lastCheckedTime}`
+      ? `正在刷新 · ${updatedLabel} ${lastCheckedTime}`
       : "正在刷新"
     : failedWithPreviousData && lastCheckedTime
       ? `刷新失败 · 仍显示 ${lastCheckedTime} 的结果`
       : manualRefreshMessage && lastCheckedTime
-        ? `${manualRefreshMessage} · 上次检查 ${lastCheckedTime}`
+        ? `${manualRefreshMessage} · ${updatedLabel} ${lastCheckedTime}`
         : lastCheckedTime
-          ? `上次检查 ${lastCheckedTime}`
+          ? `${updatedLabel} ${lastCheckedTime}`
           : "尚未检查";
 
   return (
