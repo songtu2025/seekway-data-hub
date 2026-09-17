@@ -32,6 +32,13 @@ function queueReasonMessage(
 }
 
 export function jobActionGuidance(job: SyncJob): JobActionGuidance {
+  if (job.taskStatus === "caught_up") {
+    return {
+      title: "当前数据已追平",
+      description: "无需再次同步；原失败执行记录仍保留，可继续查看诊断和批次数据。",
+      tone: "success",
+    };
+  }
   if (job.status === "queued") {
     return {
       title: "等待执行服务领取",

@@ -47,6 +47,7 @@ export function SyncJobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [actionNotice, setActionNotice] = useState("");
   const [refreshNotice, setRefreshNotice] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const jobRef = useRef<SyncJob | null>(null);
@@ -144,6 +145,7 @@ export function SyncJobDetailPage() {
     jobRef.current = null;
     setLoading(true);
     setError("");
+    setActionNotice("");
     setRetrying(false);
     setCancelling(false);
     setControllingAction(null);
@@ -212,6 +214,19 @@ export function SyncJobDetailPage() {
   ) {
     if (routeGenerationRef.current !== generation) return;
     const acceptedTaskNo = accepted.taskNo ?? fallbackTaskNo;
+    if (accepted.outcome === "already_caught_up") {
+      setActionNotice(
+        "当前数据已追平，无需重试。原执行失败记录仍保留，相关数据范围已由后续同步覆盖。",
+      );
+      const requestSequence = ++requestSequenceRef.current;
+      await loadJob(
+        acceptedTaskNo ?? String(accepted.jobId),
+        Boolean(acceptedTaskNo),
+        generation,
+        requestSequence,
+      );
+      return;
+    }
     if (acceptedTaskNo && acceptedTaskNo === routeTaskNo) {
       const requestSequence = ++requestSequenceRef.current;
       await loadJob(acceptedTaskNo, true, generation, requestSequence);
@@ -229,6 +244,7 @@ export function SyncJobDetailPage() {
     const generation = routeGenerationRef.current;
     setRetrying(true);
     setError("");
+    setActionNotice("");
     requestSequenceRef.current += 1;
     try {
       const accepted = currentJob.taskNo
@@ -445,6 +461,11 @@ export function SyncJobDetailPage() {
           </div>
         ) : null}
         {loading && !currentJob ? <Spin description="正在加载任务详情…" /> : null}
+        {actionNotice ? (
+          <div aria-live="polite" role="status">
+            <Alert title={actionNotice} showIcon type="success" />
+          </div>
+        ) : null}
         {error ? (
           <Alert
             action={

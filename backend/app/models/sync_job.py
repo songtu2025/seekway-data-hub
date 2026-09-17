@@ -88,3 +88,5 @@ class SyncJob(TimestampMixin, Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime())
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text())
+    resolution_code: Mapped[str | None] = mapped_column(String(64))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime())

@@ -257,7 +257,7 @@ export function SyncJobActionPanel({
   onShowDiagnostics,
 }: SyncJobActionPanelProps) {
   const failed = ["failed", "partial_failed"].includes(job.status);
-  if (failed || job.errorMessage) {
+  if (job.taskStatus !== "caught_up" && (failed || job.errorMessage)) {
     return (
       <SyncJobFailureActionPanel
         canRetry={canOperate && hasSyncJobAction(job, "retry")}
@@ -287,7 +287,9 @@ export function SyncJobActionPanel({
       aria-labelledby="job-next-action-title"
     >
       <div className="job-next-action-copy">
-        <span className="job-next-action-kicker">当前状态 · {statusLabel(job.status)}</span>
+        <span className="job-next-action-kicker">
+          当前状态 · {job.taskStatus === "caught_up" ? "已追平" : statusLabel(job.status)}
+        </span>
         <h2 id="job-next-action-title">{guidance.title}</h2>
         <p
           role={job.status === "paused" || job.status === "pause_requested" ? "status" : undefined}
@@ -296,6 +298,20 @@ export function SyncJobActionPanel({
         </p>
       </div>
       <div className="heading-actions job-next-action-buttons">
+        {job.taskStatus === "caught_up" && job.syncRunId != null ? (
+          <a
+            className="action-link action-link--neutral"
+            href="#job-diagnostics"
+            onClick={onShowDiagnostics}
+          >
+            查看失败请求
+          </a>
+        ) : null}
+        {job.taskStatus === "caught_up" && rawDataPath ? (
+          <Link className="action-link action-link--neutral" to={rawDataPath}>
+            查看批次数据
+          </Link>
+        ) : null}
         {canOperate && hasSyncJobAction(job, "pause") ? (
           <>
             <Button

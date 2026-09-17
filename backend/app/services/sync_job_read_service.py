@@ -21,6 +21,7 @@ AUDIT_EVENT_TYPES = {
     "sync_job.create": "created",
     "sync_job.schedule": "created",
     "sync_job.retry": "retried",
+    "sync_job.retry_noop": "resolved",
     "sync_job.resume": "resumed",
     "sync_job.pause_request": "pause_requested",
     "sync_job.pause_withdraw": "pause_withdrawn",
@@ -42,7 +43,7 @@ def api_display_name(job: SyncJob, catalog: dict[str, dict[str, Any]]) -> str:
 
 def available_actions(job: SyncJob, *, has_batch: bool) -> list[str]:
     """返回当前任务状态允许的操作，写接口仍执行最终事务校验。"""
-    if job.stop_after_current:
+    if job.stop_after_current or job.resolution_code is not None:
         return []
     actions = list(ACTION_BY_STATUS.get(job.status, []))
     if job.status == "queued" and has_batch:

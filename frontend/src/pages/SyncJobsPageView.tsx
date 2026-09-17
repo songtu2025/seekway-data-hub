@@ -66,6 +66,7 @@ const taskStatuses: SyncTaskStatus[] = [
   "paused",
   "attention",
   "success",
+  "caught_up",
   "terminated",
 ];
 
@@ -108,7 +109,7 @@ function nextActionLabel(status: SyncTaskStatus): string {
   if (["in_progress", "pausing"].includes(status)) return "查看进度";
   if (status === "paused") return "继续处理";
   if (status === "attention") return "处理失败";
-  if (status === "success") return "查看结果";
+  if (["success", "caught_up"].includes(status)) return "查看结果";
   return "查看详情";
 }
 

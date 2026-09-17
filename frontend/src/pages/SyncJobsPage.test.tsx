@@ -590,6 +590,31 @@ describe("同步任务列表", () => {
     expect(overview).toBeInTheDocument();
   });
 
+  it("已追平任务归入成功态并提供结果入口", async () => {
+    vi.mocked(api.listSyncJobs).mockResolvedValue({
+      items: [
+        {
+          ...syncJob(1),
+          status: "failed",
+          taskStatus: "caught_up",
+          executionStatus: "failed",
+          resolutionCode: "incremental_caught_up",
+        },
+      ],
+      summary: { total: 1, active: 0, attention: 0, success: 1, ended: 0 },
+    });
+    render(
+      <MemoryRouter>
+        <SyncJobsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("已追平")).toBeInTheDocument();
+    expect(screen.getByText("原执行失败，数据范围已由后续同步覆盖")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /查看结果/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "处理失败" })).not.toBeInTheDocument();
+  });
+
   it("初载任务失败后刷新成功仍保留已加载的账号选项", async () => {
     vi.mocked(api.listSyncJobs)
       .mockRejectedValueOnce(new Error("初载任务失败"))

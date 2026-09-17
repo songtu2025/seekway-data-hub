@@ -1446,6 +1446,116 @@ def test_retry_resumes_from_incremental_checkpoint_after_core_commit(
         assert retry.retry_of_job_id == original_id
 
 
+def test_retry_marks_caught_up_task_resolved_without_new_execution(
+    harness: AuthHarness,
+    monkeypatch,
+) -> None:
+    client, auth, account = create_active_account(harness, monkeypatch)
+    enable_return_policy(client, auth, account["id"])
+    fixed_utc = datetime(2026, 8, 27, 12, 0, 0)
+    monkeypatch.setattr(
+        "backend.app.services.sync_job_service.utc_now",
+        lambda: fixed_utc,
+    )
+    task_no = "task_caught_up_retry"
+    with harness.session_factory() as db:
+        db.execute(
+            insert(sync_checkpoint_table),
+            [
+                {
+                    "jijia_account_id": account["id"],
+                    "api_code": "sale_return_order_page",
+                    "checkpoint_kind": "history_backfill",
+                    "checkpoint_value": {
+                        "next_window_start": "2026-08-27",
+                        "frozen_window_end": "2026-08-26",
+                        "backfill_started_at": "2026-08-20T08:00:00Z",
+                    },
+                    "created_at": fixed_utc,
+                    "updated_at": fixed_utc,
+                },
+                {
+                    "jijia_account_id": account["id"],
+                    "api_code": "sale_return_order_page",
+                    "checkpoint_kind": "update_incremental",
+                    "checkpoint_value": {
+                        "next_window_start": "2026-08-27",
+                        "window_end": "2026-08-26",
+                    },
+                    "created_at": fixed_utc,
+                    "updated_at": fixed_utc,
+                },
+            ],
+        )
+        original = SyncJob(
+            job_no="job_caught_up_retry",
+            task_no=task_no,
+            jijia_account_id=account["id"],
+            api_code="sale_return_order_page",
+            job_type="update_incremental",
+            trigger_type="manual",
+            status="failed",
+            window_start=date(2026, 8, 26),
+            window_end=date(2026, 8, 26),
+            progress_json={"currentPage": 1, "totalPages": 1},
+            attempt_count=1,
+            max_attempts=2,
+            queued_at=fixed_utc,
+            error_code="UPSTREAM_API_FAILED",
+            error_message="同步接口执行失败",
+        )
+        db.add(original)
+        db.commit()
+        original_id = original.id
+
+    resolved = client.post(
+        f"/api/v1/sync-jobs/tasks/{task_no}/retry",
+        headers={"X-CSRF-Token": auth["csrfToken"]},
+    )
+    repeated = client.post(
+        f"/api/v1/sync-jobs/tasks/{task_no}/retry",
+        headers={"X-CSRF-Token": auth["csrfToken"]},
+    )
+
+    assert resolved.status_code == 200
+    assert resolved.json()["data"] == {
+        "outcome": "already_caught_up",
+        "jobId": original_id,
+        "taskNo": task_no,
+        "taskStatus": "caught_up",
+    }
+    assert repeated.status_code == 200
+    assert repeated.json()["data"] == resolved.json()["data"]
+    with harness.session_factory() as db:
+        jobs = list(db.scalars(select(SyncJob).where(SyncJob.task_no == task_no)).all())
+        audits = list(
+            db.scalars(
+                select(AuditLog).where(
+                    AuditLog.action == "sync_job.retry_noop",
+                    AuditLog.resource_id == str(original_id),
+                )
+            ).all()
+        )
+        assert len(jobs) == 1
+        assert jobs[0].status == "failed"
+        assert jobs[0].error_code == "UPSTREAM_API_FAILED"
+        assert jobs[0].resolution_code == "incremental_caught_up"
+        assert jobs[0].resolved_at == fixed_utc
+        assert len(audits) == 1
+
+    detail = client.get(f"/api/v1/sync-jobs/tasks/{task_no}").json()["data"]
+    successful = client.get("/api/v1/sync-jobs?status_group=success").json()["data"]
+    attention = client.get("/api/v1/sync-jobs?status_group=attention").json()["data"]
+
+    assert detail["status"] == "failed"
+    assert detail["taskStatus"] == "caught_up"
+    assert detail["resolutionCode"] == "incremental_caught_up"
+    assert detail["availableActions"] == []
+    assert any(item["taskNo"] == task_no for item in successful["items"])
+    assert all(item["taskNo"] != task_no for item in attention["items"])
+    assert successful["summary"]["success"] == 1
+
+
 def test_manual_job_uses_update_window_after_history_checkpoint_completes(
     harness: AuthHarness,
     monkeypatch,

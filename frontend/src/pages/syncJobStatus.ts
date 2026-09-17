@@ -8,6 +8,7 @@ const taskStatusLabels: Record<SyncTaskStatus, string> = {
   paused: "已暂停",
   attention: "需处理",
   success: "已完成",
+  caught_up: "已追平",
   terminated: "已终止",
 };
 
@@ -47,6 +48,9 @@ export function taskWindowProgress(job: SyncJob): { completed: number; total: nu
 }
 
 export function executionStageLabel(job: SyncJob): string {
+  if (getTaskStatus(job) === "caught_up") {
+    return "原执行失败，数据范围已由后续同步覆盖";
+  }
   const status = job.executionStatus ?? job.status;
   const progress = taskWindowProgress(job);
   const currentWindow = progress ? Math.min(progress.completed + 1, progress.total) : null;

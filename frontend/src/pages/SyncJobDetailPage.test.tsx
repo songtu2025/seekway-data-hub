@@ -1301,6 +1301,72 @@ describe("同步任务详情", () => {
     expect(screen.getByTestId("current-path")).toHaveTextContent(`/jobs/tasks/${taskNo}`);
   });
 
+  it("增量已追平时原地标记任务并保留失败证据", async () => {
+    const taskNo = "task_caught_up_1";
+    const failedJob: SyncJob = {
+      id: 8,
+      taskNo,
+      jijiaAccountId: 4,
+      apiCode: "sale_return_order_page",
+      jobType: "update_incremental",
+      status: "failed",
+      syncRunId: 31,
+      syncBatchNo: "sync_20260917_001",
+      availableActions: ["retry"],
+      errorMessage: "同步接口执行失败",
+    };
+    vi.mocked(api.getSyncTask)
+      .mockResolvedValueOnce(failedJob)
+      .mockResolvedValueOnce({
+        ...failedJob,
+        taskStatus: "caught_up",
+        resolutionCode: "incremental_caught_up",
+        resolvedAt: "2026-09-17T16:26:45Z",
+        availableActions: [],
+        lifecycleEvents: [
+          {
+            id: "audit-1",
+            eventType: "resolved",
+            occurredAt: "2026-09-17T16:26:45Z",
+            actorName: "spring",
+            executionId: 8,
+            status: "failed",
+          },
+        ],
+      });
+    vi.mocked(api.retrySyncTask).mockResolvedValue({
+      outcome: "already_caught_up",
+      jobId: 8,
+      taskNo,
+      taskStatus: "caught_up",
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[`/jobs/tasks/${taskNo}`]}>
+        <Routes>
+          <Route path="/jobs/tasks/:taskNo" element={<SyncJobDetailPage />} />
+        </Routes>
+        <CurrentPath />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "重试任务" }));
+
+    await waitFor(() => expect(api.getSyncTask).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "当前数据已追平，无需重试。原执行失败记录仍保留，相关数据范围已由后续同步覆盖。",
+    );
+    expect(screen.getByRole("heading", { name: "当前数据已追平" })).toBeInTheDocument();
+    expect(screen.getByText("当前状态 · 已追平")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看失败请求" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看批次数据" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "重试任务" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("current-path")).toHaveTextContent(`/jobs/tasks/${taskNo}`);
+
+    await user.click(screen.getByRole("tab", { name: "任务事件（1）" }));
+    expect(screen.getByText("数据范围已由后续同步覆盖")).toBeInTheDocument();
+  });
+
   it("同一任务号继续成功后立即加载新执行", async () => {
     const taskNo = "task_paused_1";
     vi.mocked(api.getSyncTask)
