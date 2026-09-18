@@ -8330,3 +8330,11 @@
 - 部署契约调整为 API 和 Worker 按 1→2→4 金丝雀启动期间保持 Scheduler 关闭；启动新服务前只读枚举遗留 `jijia-*` unit，发现旧服务即停止发布并另行迁移；调度归属完成并单独授权后才能启用 Scheduler。
 - 完整 `scripts/check.ps1` 通过：后端 568 个 pytest（91% 覆盖率）、同步核心 259 个 unittest、前端 391 个 Vitest；Ruff、Mypy、compileall、pip check、Prettier、ESLint、TypeScript、Vite build、jscpd、Knip、Vulture、敏感字面量和 `git diff --check` 均通过。Vite 仍有既有主包体积告警，本轮未做无关拆包。
 - 本轮只在独立 worktree 修改本地仓库；未修改 GitHub 仓库名，未连接或改动生产 ECS、PolarDB、积加 API、DNS、TLS 和 Nginx。
+
+## 2026-09-18 接入查询日期范围报告
+
+- 按积加公开文档 `id=27` 接入 `POST /finance/asset/dateRangeReports/page`，配置编码为 `date_range_reports_page`，保持 `enabled=false`。
+- 用户确认历史起点为 `2021-08-01`；配置按市场时间逐日回补，使用 `page/pagesize=100`、`data.rows/data.total`、行主键 `id`、业务日期 `marketDate` 和官方每秒 1 次限流。
+- 不传店铺、费用、订单和报表类型等可选筛选，避免缩小业务范围；不设置猜测性的 `max_pages`，按实时 `total` 完成分页。响应包含订单、地区和金额字段，因此标记为敏感响应。
+- 新增配置契约测试，离线配置校验通过，共加载 85 条配置、47 条 legacy enabled；同步核心 260 个 unittest 通过，Ruff、compileall、pip check、jscpd、Knip、Vulture、敏感字面量扫描和 `git diff --check` 通过。
+- 本轮不修改数据库结构、认证、权限、依赖或前端，不调用真实业务接口，不发布生产配置，不创建同步任务，不部署、提交或推送。

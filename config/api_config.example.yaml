@@ -1577,6 +1577,44 @@ apis:
       viewType: day
       showCurrencyType: YUAN
 
+  # 第六十六个真实文档接口：查询日期范围报告，文档 id=27；按市场时间从 2021-08-01 起逐日回补。
+  - api_code: date_range_reports_page
+    name: 查询日期范围报告
+    enabled: false
+    method: POST
+    path: /finance/asset/dateRangeReports/page
+    page:
+      enabled: true
+      page_no_field: page
+      page_size_field: pagesize
+      page_size: 100
+      list_field: data.rows
+      total_field: data.total
+    commit_per_page: true
+    data_date_param: purchaseStartDate
+    primary_key:
+      field: id
+      required: false
+    date_field: marketDate
+    date_window:
+      enabled: true
+      start_field: purchaseStartDate
+      end_field: purchaseEndDate
+      default_start: "2021-08-01"
+      days: 1
+      lag_days: 1
+    sensitive_response: true
+    rate_limit:
+      max_requests: 1
+      period_seconds: 1
+    retry:
+      retries: 1
+      delay_seconds: 1
+    params:
+      queryDateType: 0
+      page: 1
+      pagesize: 100
+
   # 第五十个真实文档接口：流量统计-ASIN，文档 id=122，已完成完整单日窗口验证并加入 daily enabled。
   - api_code: traffic_page
     name: 流量统计-ASIN

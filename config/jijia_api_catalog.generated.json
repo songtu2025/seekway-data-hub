@@ -7,7 +7,7 @@
     "tree_api_count": 189,
     "detail_success_count": 189,
     "detail_error_count": 0,
-    "configured_real_api_count": 76,
+    "configured_real_api_count": 77,
     "configured_enabled_real_api_count": 47,
     "classification_counts": {
       "direct_read_candidate": 58,
@@ -16,14 +16,14 @@
       "write_or_mutation": 28
     },
     "execution_bucket_counts": {
-      "configured": 76,
-      "defer_or_review": 44,
+      "configured": 77,
+      "defer_or_review": 43,
       "needs_sensitive_review": 14,
       "needs_upstream_params": 43,
       "terminal_deferred": 12
     },
     "execution_stage_counts": {
-      "configured_disabled": 29,
+      "configured_disabled": 30,
       "configured_enabled": 47,
       "defer_no_param_source": 4,
       "defer_runtime_rejected": 4,
@@ -32,7 +32,7 @@
       "framework_auth_only": 1,
       "needs_param_source": 43,
       "needs_sensitive_review": 14,
-      "risk_review_before_probe": 16
+      "risk_review_before_probe": 15
     },
     "menu_counts": {
       "产品": 18,
@@ -141,10 +141,10 @@
       },
       "财务": {
         "total": 13,
-        "configured": 1,
+        "configured": 2,
         "enabled": 0,
         "terminal_deferred": 0,
-        "pending_review": 12,
+        "pending_review": 11,
         "closed": false
       },
       "采购": {
@@ -4159,11 +4159,11 @@
       "has_page_response": true,
       "has_list_response": false,
       "has_sensitive_response_fields": false,
-      "configured_api_code": "",
+      "configured_api_code": "date_range_reports_page",
       "configured_enabled": false,
-      "execution_bucket": "defer_or_review",
-      "execution_stage": "risk_review_before_probe",
-      "execution_reason": "接口位于订单、财务、客服、物流或销售等高风险域，需先人工确认字段和调用边界。",
+      "execution_bucket": "configured",
+      "execution_stage": "configured_disabled",
+      "execution_reason": "已配置但默认关闭，需按数据量、窗口和批量耗时评估后再启用。",
       "rate_limit": {
         "max_requests": 1,
         "period_seconds": 1,
