@@ -123,6 +123,45 @@ describe("原始数据列表", () => {
     vi.mocked(api.listRawDataVersions).mockResolvedValue({ items: [] });
   });
 
+  it("为窄屏原始数据卡片提供完整字段标签", async () => {
+    vi.mocked(api.listRawData).mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          apiCode: "sale_return_order_page",
+          jijiaAccountId: 8,
+          accountName: "北美业务账号",
+          sourcePrimaryKey: "RETURN-001",
+          dataDate: "2026-08-26",
+          observationCount: 1,
+          versionCount: 0,
+          lastObservedAt: "2026-08-26T08:00:00Z",
+          updatedAt: "2026-08-26T08:00:00Z",
+          batchNo: "batch-001",
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <RawDataPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("link", { name: "sale_return_order_page" });
+    const table = screen.getByRole("table", { name: "原始数据当前快照列表" });
+    const wrapper = table.closest(".ant-table-wrapper");
+    const labels = Array.from(table.querySelectorAll("tbody td"))
+      .map((cell) => cell.getAttribute("data-label"))
+      .filter(Boolean);
+
+    expect(wrapper).toHaveClass("responsive-card-table");
+    expect(labels).toEqual(["接口", "业务主键", "数据日期", "观察情况", "最后观察", "当前批次"]);
+    expect(table.querySelector('td[data-label="业务主键"]')).toHaveAttribute(
+      "data-card-width",
+      "full",
+    );
+  });
+
   it("从接口中心进入原始列表，查询后仍能返回原账号与接口筛选", async () => {
     const user = userEvent.setup();
     const catalogPath = "/api-catalog?account=8&api=amazon_shop_page&q=shop";

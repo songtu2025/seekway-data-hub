@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Alert, Dropdown } from "antd";
 import type { MenuProps } from "antd";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
@@ -48,9 +48,30 @@ function readDashboardStatus(): DashboardSummary | null {
   }
 }
 
-function SectionNav({ label, items }: { label: string; items: SectionNavItem[] }) {
+function useActiveNavigationVisibility(pathname: string) {
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const activeItem = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    activeItem?.scrollIntoView?.({ block: "nearest", inline: "center" });
+  }, [pathname]);
+
+  return navRef;
+}
+
+function SectionNav({
+  label,
+  items,
+  pathname,
+}: {
+  label: string;
+  items: SectionNavItem[];
+  pathname: string;
+}) {
+  const navRef = useActiveNavigationVisibility(pathname);
+
   return (
-    <nav className="section-nav" aria-label={label}>
+    <nav className="section-nav" aria-label={label} ref={navRef}>
       {items.map((item) => (
         <NavLink className="section-nav-link" key={item.to} to={item.to}>
           {item.label}
@@ -82,6 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     location.pathname.startsWith("/data/");
   const inSystemSection =
     location.pathname.startsWith("/members") || location.pathname.startsWith("/audit");
+  const mainNavRef = useActiveNavigationVisibility(location.pathname);
 
   useEffect(() => {
     setDashboardStatus(readDashboardStatus());
@@ -168,7 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           <span>{PRODUCT_NAME}</span>
         </div>
-        <nav aria-label="主导航">
+        <nav aria-label="主导航" ref={mainNavRef}>
           <NavLink className="top-nav-link" end to="/">
             概览
           </NavLink>
@@ -252,12 +274,22 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           </nav>
         ) : null}
-        {inAccessSection ? <SectionNav label="接入管理导航" items={accessSectionItems} /> : null}
+        {inAccessSection ? (
+          <SectionNav
+            label="接入管理导航"
+            items={accessSectionItems}
+            pathname={location.pathname}
+          />
+        ) : null}
         {inDataSection && user?.role !== "viewer" ? (
-          <SectionNav label="数据中心导航" items={dataSectionItems} />
+          <SectionNav label="数据中心导航" items={dataSectionItems} pathname={location.pathname} />
         ) : null}
         {inSystemSection && user?.role === "admin" ? (
-          <SectionNav label="系统设置导航" items={systemSectionItems} />
+          <SectionNav
+            label="系统设置导航"
+            items={systemSectionItems}
+            pathname={location.pathname}
+          />
         ) : null}
         {logoutError ? <Alert className="shell-alert" title={logoutError} type="error" /> : null}
         {globalAlert && location.pathname !== "/" && !inSyncSection ? (

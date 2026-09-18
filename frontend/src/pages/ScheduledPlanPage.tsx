@@ -120,7 +120,6 @@ export function ScheduledPlanPage() {
               <div className="job-create-section-heading">
                 <div>
                   <h2 id="scheduled-plan-account-heading">1. 同步账号</h2>
-                  <p>确认计划所属账号，并查看任务执行服务是否可用。</p>
                 </div>
               </div>
               <div className="scheduled-plan-worker-compact">

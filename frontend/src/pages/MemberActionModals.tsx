@@ -35,7 +35,6 @@ export function InviteMemberModal({
       }}
       onCancel={onClose}
     >
-      <p className="modal-description">系统将向该邮箱发送一次性注册链接。</p>
       <Form
         clearOnDestroy
         className="invite-member-form"
@@ -80,7 +79,7 @@ export function InviteMemberModal({
             virtual={false}
           />
         </Form.Item>
-        <p className="invite-note">链接有效期由系统安全策略决定；过期后可由管理员重新发送。</p>
+        <p className="invite-note">将向该邮箱发送一次性注册链接；过期后可重新发送。</p>
         {error ? <Alert title={error} type="error" /> : null}
         <div className="invite-member-actions">
           <Button autoInsertSpace={false} htmlType="button" onClick={onClose}>

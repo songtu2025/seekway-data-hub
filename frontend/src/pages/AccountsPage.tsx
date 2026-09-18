@@ -168,7 +168,6 @@ export function AccountsPage() {
               {filterLabels[item]} {counts[item]}
             </Button>
           ))}
-          <span>{canEdit ? "可管理账号" : "只读权限"}</span>
         </section>
 
         {accountNotice ? (
@@ -246,19 +245,19 @@ export function AccountsPage() {
             ) : null}
             {filteredRows.map(({ account, readiness }) => (
               <div className="account-overview-row" key={account.id}>
-                <span className="account-overview-name">
+                <span className="account-overview-name" data-label="账号">
                   <Link state={returnNavigation} to={`/accounts/${account.id}`}>
                     {account.name}
                   </Link>
                   <small>appId · {account.maskedAppId}</small>
                 </span>
-                <span>
+                <span data-label="当前状态">
                   <Tag className={`readiness-badge readiness-badge--${readiness.tone}`}>
                     {readiness.label}
                   </Tag>
                   <small>{readiness.description}</small>
                 </span>
-                <span>
+                <span data-label="同步范围">
                   <strong>{account.enabledPolicyCount ?? 0} 个接口</strong>
                   <small>
                     {!readiness.scopeReady
@@ -268,13 +267,13 @@ export function AccountsPage() {
                         : "仅手动执行"}
                   </small>
                 </span>
-                <span>
+                <span data-label="最近同步">
                   <strong>
                     {account.latestJobStatus ? statusLabel(account.latestJobStatus) : "暂无记录"}
                   </strong>
                   <small>{formatAccountDate(account.latestJobAt, "尚未发起同步")}</small>
                 </span>
-                <span className="account-overview-action">
+                <span className="account-overview-action" data-label="下一步">
                   {readiness.primaryActionTarget ? (
                     <Link state={returnNavigation} to={readiness.primaryActionTarget}>
                       {readiness.primaryActionLabel}

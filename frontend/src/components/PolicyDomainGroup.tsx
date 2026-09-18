@@ -75,20 +75,25 @@ export function PolicyDomainGroup({
               <small>{policy.apiCode}</small>
             </span>
             <span className="policy-row-domain">
+              <span className="policy-row-mobile-label">业务域</span>
               {businessDomainLabel(businessDomainKey(policy))}
             </span>
-            <Tag className={`badge ${policy.enabled ? "status-active" : "status-disabled"}`}>
-              {!policy.catalogEnabled
-                ? "平台停用"
-                : accountStatus !== "active" && policy.enabled
-                  ? "运行受阻"
-                  : policy.enabled
-                    ? automated
-                      ? "自动运行"
-                      : "可手动"
-                    : "未启用"}
-            </Tag>
+            <span className="policy-row-status">
+              <span className="policy-row-mobile-label">状态</span>
+              <Tag className={`badge ${policy.enabled ? "status-active" : "status-disabled"}`}>
+                {!policy.catalogEnabled
+                  ? "平台停用"
+                  : accountStatus !== "active" && policy.enabled
+                    ? "运行受阻"
+                    : policy.enabled
+                      ? automated
+                        ? "自动运行"
+                        : "可手动"
+                      : "未启用"}
+              </Tag>
+            </span>
             <span className="policy-row-schedule">
+              <span className="policy-row-mobile-label">同步策略</span>
               {scheduleNames[policy.scheduleMode]}
               {policy.scheduleExpr ? ` · ${policy.scheduleExpr}` : ""}
             </span>
@@ -243,15 +248,20 @@ function PolicyEditor({
       <section className="policy-editor-section">
         <h3>执行方式</h3>
         <div className="policy-editor-fields">
-          <p aria-label="计划时区">
+          <p aria-label="计划时区" className="policy-editor-field">
             {scheduleNames[policy.scheduleMode]} {policy.scheduleExpr} · 北京时间
           </p>
           <Link
+            className="policy-editor-field policy-editor-plan-link"
             state={sourceState}
             to={`/jobs/plans/${accountId}/${encodeURIComponent(policy.apiCode)}`}
           >
             {canEdit ? "设置定时计划" : "查看定时计划"}
           </Link>
+          <p className="policy-editor-field">
+            日期窗口：
+            {policy.supportsDateWindow ? "按已保存的同步进度继续" : "此接口不使用日期窗口"}
+          </p>
           {!policy.enabled && enabled && policy.scheduleMode !== "manual_only" ? (
             <p className="policy-editor-change-note">启用后将恢复该接口原有的定时设置。</p>
           ) : null}
@@ -260,10 +270,6 @@ function PolicyEditor({
               停用后不能创建新任务，正在执行的任务不受影响，原周期和时间会保留。
             </p>
           ) : null}
-          <p>
-            日期窗口：
-            {policy.supportsDateWindow ? "按已保存的同步进度继续" : "此接口不使用日期窗口"}
-          </p>
         </div>
       </section>
       <details className="policy-technical-rules">

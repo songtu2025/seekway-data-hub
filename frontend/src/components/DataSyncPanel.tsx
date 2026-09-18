@@ -16,6 +16,7 @@ const STATUS_POLL_INTERVAL_MS = 15000;
 
 interface DataSyncPanelProps {
   apiCode: string;
+  displayName: string;
   accounts: JijiaAccount[];
   selectedAccountId: string;
   loadedCount: number;
@@ -25,6 +26,7 @@ interface DataSyncPanelProps {
 
 export function DataSyncPanel({
   apiCode,
+  displayName,
   accounts,
   selectedAccountId,
   loadedCount,
@@ -254,13 +256,44 @@ export function DataSyncPanel({
       : currentRuntime?.availability === "busy"
         ? "加入同步队列"
         : "按进度同步";
+  const readinessTitle = currentLoading
+    ? "正在检查同步状态"
+    : currentError && !currentLastUpdatedAt
+      ? "同步状态暂时不可用"
+      : activeJob
+        ? "同步任务正在处理"
+        : disabledReason() ||
+          (currentRuntime?.availability === "busy"
+            ? "可以加入同步队列"
+            : currentRuntime?.availability === "offline"
+              ? "可以创建同步任务"
+              : "可以按当前进度同步");
+  const readinessDescription =
+    currentError && !currentLastUpdatedAt
+      ? "状态检查失败，系统会继续自动重试。"
+      : !effectiveAccount
+        ? "选择账号后即可查看接口状态并创建同步任务。"
+        : !canOperate
+          ? "你仍可以查看现有数据和历史任务。"
+          : !csrfToken
+            ? "刷新页面或重新登录后重试。"
+            : !catalogReady
+              ? "请先确认此接口已经接入当前账号。"
+              : !accountEnabled
+                ? "请先在账号策略中启用当前接口。"
+                : activeJob
+                  ? "打开最近任务可查看执行进度。"
+                  : syncDescription;
 
   return (
     <section className={`data-sync-panel data-sync-panel--${statusTone}`} aria-live="polite">
       <header className="data-sync-header">
         <div className="data-sync-title">
           <span>同步控制</span>
-          <strong>{currentCatalogItem?.name ?? apiCode}</strong>
+          <div className="data-sync-interface">
+            <strong>{currentCatalogItem?.name ?? displayName}</strong>
+            <span>{apiCode}</span>
+          </div>
         </div>
         <div className="data-sync-worker">
           <span>执行服务</span>
@@ -273,6 +306,30 @@ export function DataSyncPanel({
           )}
         </div>
       </header>
+      <div className="data-sync-command">
+        <div className="data-sync-readiness">
+          <strong>{readinessTitle}</strong>
+          <p>{readinessDescription}</p>
+        </div>
+        <div className="data-sync-actions">
+          <Button
+            className="data-sync-primary-action"
+            color="primary"
+            disabled={!canCreateJob}
+            loading={currentCreating}
+            variant="solid"
+            onClick={() => void createJob()}
+            title={actionTitle}
+          >
+            {actionLabel}
+          </Button>
+          {currentLoading ? (
+            <small>
+              <Spin size="small" /> 正在检查同步状态
+            </small>
+          ) : null}
+        </div>
+      </div>
       <dl className="data-sync-metrics">
         <div>
           <dt>账号</dt>
@@ -292,26 +349,32 @@ export function DataSyncPanel({
         </div>
       </dl>
       <footer className="data-sync-footer">
-        <div className="data-sync-guidance">
-          <small>{syncDescription}</small>
-          <div className="data-sync-links">
-            {canOperate ? (
-              <Link
-                className="m3-link"
-                to={`/jobs/new?${new URLSearchParams({ apiCode, ...(selectedAccountId || effectiveAccount ? { accountId: selectedAccountId || String(effectiveAccount?.id) } : {}) })}`}
-                state={sourceState}
-              >
-                自定义同步范围
-              </Link>
-            ) : null}
-            {currentLatestJob ? (
-              <Link className="m3-link" to={`/jobs/${currentLatestJob.id}`} state={sourceState}>
-                最近任务：{statusLabel(currentLatestJob.status)}
-              </Link>
-            ) : (
-              <span>暂无任务</span>
-            )}
-          </div>
+        <div className="data-sync-links">
+          {canOperate ? (
+            <Link
+              className="m3-link"
+              to={`/jobs/new?${new URLSearchParams({ apiCode, ...(selectedAccountId || effectiveAccount ? { accountId: selectedAccountId || String(effectiveAccount?.id) } : {}) })}`}
+              state={sourceState}
+            >
+              自定义同步范围
+            </Link>
+          ) : null}
+          {currentLatestJob ? (
+            <Link className="m3-link" to={`/jobs/${currentLatestJob.id}`} state={sourceState}>
+              最近任务：{statusLabel(currentLatestJob.status)}
+            </Link>
+          ) : (
+            <span>暂无历史任务</span>
+          )}
+        </div>
+        <RefreshStatus
+          failedWithPreviousData={Boolean(currentError && currentLastUpdatedAt)}
+          lastUpdatedAt={currentLastUpdatedAt}
+          refreshing={currentRefreshing}
+        />
+      </footer>
+      {currentMessage || currentError || currentHasNewData ? (
+        <div className="data-sync-feedback">
           {currentMessage ? <Alert title={currentMessage} type="success" /> : null}
           {currentHasNewData ? (
             <Button type="link" onClick={viewLatestData}>
@@ -319,34 +382,8 @@ export function DataSyncPanel({
             </Button>
           ) : null}
           {currentError ? <Alert title={currentError} type="error" /> : null}
-          <RefreshStatus
-            failedWithPreviousData={Boolean(currentError && currentLastUpdatedAt)}
-            lastUpdatedAt={currentLastUpdatedAt}
-            refreshing={currentRefreshing}
-          />
-          {!currentLoading && disabledReason() && !activeJob ? (
-            <small>{disabledReason()}</small>
-          ) : null}
         </div>
-        <div className="data-sync-actions">
-          <Button
-            className="data-sync-primary-action"
-            color="primary"
-            disabled={!canCreateJob}
-            loading={currentCreating}
-            variant="outlined"
-            onClick={() => void createJob()}
-            title={actionTitle}
-          >
-            {actionLabel}
-          </Button>
-          {currentLoading ? (
-            <small>
-              <Spin size="small" /> 正在检查同步状态
-            </small>
-          ) : null}
-        </div>
-      </footer>
+      ) : null}
     </section>
   );
 }

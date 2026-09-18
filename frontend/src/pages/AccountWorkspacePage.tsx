@@ -207,13 +207,8 @@ export function AccountWorkspacePage() {
 
         {!loading && account && readiness ? (
           <>
-            <section
-              className={`workspace-next-action workspace-next-action--${readiness.tone}`}
-              aria-label="账号下一步"
-            >
+            <section className="workspace-next-action" aria-label="账号下一步">
               <div>
-                <span>当前状态</span>
-                <strong>{readiness.label}</strong>
                 <p>{readiness.description}</p>
               </div>
               <PrimaryAction

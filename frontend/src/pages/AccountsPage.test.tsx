@@ -95,6 +95,11 @@ describe("接入管理账号列表", () => {
     );
     expect(screen.getByRole("link", { name: /查看账号/ })).toHaveAttribute("href", "/accounts/8");
     expect(screen.getByRole("button", { name: "全部 1" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("只读权限")).not.toBeInTheDocument();
+    const row = screen.getByText("北美业务账号").closest(".account-overview-row");
+    expect(row?.querySelectorAll("[data-label]")).toHaveLength(5);
+    expect(row?.querySelector('[data-label="同步范围"]')).toHaveTextContent("0 个接口");
+    expect(row?.querySelector('[data-label="最近同步"]')).toHaveTextContent("暂无记录");
   });
 
   it("Operator 能看到账号真实的下一步操作", async () => {
@@ -106,6 +111,7 @@ describe("接入管理账号列表", () => {
     );
 
     await screen.findByText("北美业务账号");
+    expect(screen.queryByText("可管理账号")).not.toBeInTheDocument();
     expect(screen.getByText("待配置")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /配置同步范围/ })).toHaveAttribute(
       "href",

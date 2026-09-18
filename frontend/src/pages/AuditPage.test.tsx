@@ -366,7 +366,13 @@ describe("审计日志列表", () => {
     await user.click(screen.getByRole("button", { name: /^筛\s*选$/ }));
 
     expect(await screen.findByText("创建同步任务")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "同步任务 #42" })).toHaveAttribute("href", "/jobs/42");
+    const resourceLink = screen.getByRole("link", { name: "同步任务 #42" });
+    expect(resourceLink.closest(".ant-table-wrapper")).toHaveClass(
+      "audit-responsive-table",
+      "responsive-card-table",
+    );
+    expect(resourceLink.closest("td")).toHaveAttribute("data-label", "资源");
+    expect(resourceLink).toHaveAttribute("href", "/jobs/42");
     expect(api.listAuditLogs).toHaveBeenLastCalledWith({
       cursor: undefined,
       jijiaAccountId: undefined,

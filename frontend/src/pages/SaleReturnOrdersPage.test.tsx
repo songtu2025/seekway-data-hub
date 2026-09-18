@@ -183,6 +183,12 @@ describe("退货订单列表", () => {
 
     expect(await screen.findByText("2021-08-01 09:30:00")).toBeInTheDocument();
     const orderLink = screen.getByRole("button", { name: "order-1" });
+    expect(orderLink.closest(".ant-table-wrapper")).toHaveClass(
+      "sale-return-table",
+      "responsive-card-table",
+    );
+    expect(orderLink.closest("td")).toHaveAttribute("data-label", "订单与商品");
+    expect(orderLink.closest("td")).toHaveAttribute("data-card-width", "full");
     expect(screen.queryByRole("link", { name: "order-1" })).not.toBeInTheDocument();
     expect(orderLink.closest(".table-cell-stack")).toHaveTextContent("seller-1");
     expect(screen.getByText("SELLABLE")).toBeInTheDocument();

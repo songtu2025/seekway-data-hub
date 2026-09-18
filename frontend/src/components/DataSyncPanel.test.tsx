@@ -94,6 +94,7 @@ describe("DataSyncPanel", () => {
         <DataSyncPanel
           accounts={[account]}
           apiCode="amazon_shop_page"
+          displayName="店铺信息"
           loadedCount={3}
           selectedAccountId=""
           onSynced={vi.fn()}
@@ -102,7 +103,10 @@ describe("DataSyncPanel", () => {
     );
 
     const syncButton = await screen.findByRole("button", { name: "按进度同步" });
-    expect(syncButton).toHaveClass("ant-btn-variant-outlined");
+    expect(syncButton).toHaveClass("ant-btn-variant-solid");
+    expect(screen.getByText("查询亚马逊店铺列表")).toBeInTheDocument();
+    expect(screen.getByText("amazon_shop_page")).toBeInTheDocument();
+    expect(screen.getByText("可以按当前进度同步")).toBeInTheDocument();
     expect(screen.getByText("将从已保存的同步进度继续。")).toBeInTheDocument();
     await user.click(syncButton);
 
@@ -140,6 +144,7 @@ describe("DataSyncPanel", () => {
         <DataSyncPanel
           accounts={[account]}
           apiCode="amazon_shop_page"
+          displayName="店铺信息"
           loadedCount={10}
           preservePageOnSync
           selectedAccountId=""
@@ -163,6 +168,7 @@ describe("DataSyncPanel", () => {
         <DataSyncPanel
           accounts={[account, secondAccount]}
           apiCode="amazon_shop_page"
+          displayName="店铺信息"
           loadedCount={0}
           selectedAccountId=""
           onSynced={vi.fn()}
@@ -171,6 +177,30 @@ describe("DataSyncPanel", () => {
     );
 
     expect(await screen.findByTitle("请选择一个积加账号后同步")).toBeDisabled();
+    expect(screen.getByText("店铺信息")).toBeInTheDocument();
+    expect(screen.getByText("请选择一个积加账号后同步")).toBeInTheDocument();
+    expect(screen.getByText("选择账号后即可查看接口状态并创建同步任务。")).toBeInTheDocument();
+  });
+
+  it("首次状态检查失败时不误报接口未接入", async () => {
+    vi.mocked(api.getApiCatalog).mockRejectedValueOnce(new Error("offline"));
+
+    render(
+      <MemoryRouter>
+        <DataSyncPanel
+          accounts={[account]}
+          apiCode="amazon_shop_page"
+          displayName="店铺信息"
+          loadedCount={3}
+          selectedAccountId=""
+          onSynced={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("同步状态暂时不可用")).toBeInTheDocument();
+    expect(screen.getByText("状态检查失败，系统会继续自动重试。")).toBeInTheDocument();
+    expect(screen.queryByText("当前接口不在已接入目录中")).not.toBeInTheDocument();
   });
 
   it("Worker 忙碌且已有活动任务时展示处理中语义并禁止重复创建", async () => {
@@ -202,6 +232,7 @@ describe("DataSyncPanel", () => {
         <DataSyncPanel
           accounts={[account]}
           apiCode="amazon_shop_page"
+          displayName="店铺信息"
           loadedCount={3}
           selectedAccountId=""
           onSynced={vi.fn()}
@@ -236,6 +267,7 @@ describe("DataSyncPanel", () => {
         <DataSyncPanel
           accounts={[account]}
           apiCode="amazon_shop_page"
+          displayName="店铺信息"
           loadedCount={3}
           selectedAccountId=""
           onSynced={vi.fn()}
@@ -245,7 +277,7 @@ describe("DataSyncPanel", () => {
 
     const queueButton = await screen.findByRole("button", { name: "加入同步队列" });
     expect(queueButton).toBeEnabled();
-    expect(queueButton).toHaveClass("ant-btn-variant-outlined");
+    expect(queueButton).toHaveClass("ant-btn-variant-solid");
     expect(queueButton).toHaveAttribute("title", "执行服务忙碌，新任务会进入队列");
     expect(screen.getByText("执行服务正在处理其他任务，新任务会进入队列。")).toBeInTheDocument();
   });
@@ -278,6 +310,7 @@ describe("DataSyncPanel", () => {
         <DataSyncPanel
           accounts={[account, secondAccount]}
           apiCode="amazon_shop_page"
+          displayName="店铺信息"
           loadedCount={0}
           selectedAccountId="8"
           onSynced={vi.fn()}
@@ -291,6 +324,7 @@ describe("DataSyncPanel", () => {
         <DataSyncPanel
           accounts={[account, secondAccount]}
           apiCode="amazon_shop_page"
+          displayName="店铺信息"
           loadedCount={0}
           selectedAccountId="9"
           onSynced={vi.fn()}

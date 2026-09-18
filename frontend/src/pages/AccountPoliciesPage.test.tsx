@@ -393,6 +393,14 @@ describe("账号接口策略页", () => {
     expect(screen.getByRole("button", { name: "已启用 2" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "自动计划 1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "未启用 1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "定时计划" })).toHaveAttribute(
+      "href",
+      "/jobs/plans?account=8",
+    );
+    expect(screen.queryByText("选择接口后可批量设置")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("需要立即执行时，进入任务预览确认日期范围。"),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "预览并发起同步" })).toHaveAttribute(
       "href",
       "/jobs/new?accountId=8",
