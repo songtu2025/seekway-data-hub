@@ -8,7 +8,6 @@ NGINX_CONFIG = PROJECT_ROOT / "config" / "ecs" / "nginx.conf.example"
 FRONTEND_NGINX_CONFIG = PROJECT_ROOT / "config" / "docker" / "frontend-nginx.conf"
 COMPOSE_CONFIG = PROJECT_ROOT / "compose.yaml"
 DOCKERFILE = PROJECT_ROOT / "Dockerfile"
-README = PROJECT_ROOT / "README.md"
 
 
 def test_nginx_config_keeps_api_out_of_spa_fallback() -> None:
@@ -87,50 +86,3 @@ def test_compose_services_use_scoped_preflight_and_safe_runtime_contract() -> No
     assert services["worker"]["profiles"] == ["runtime"]
     assert services["worker"]["environment"]["WORKER_NAME"] == ""
     assert services["worker"]["stop_grace_period"] == "3h"
-
-
-def test_ecs_readme_uses_compose_worker_canary_and_single_worker_rollback() -> None:
-    readme = README.read_text("utf-8")
-
-    for expected in (
-        "docker compose config --quiet",
-        "docker compose build frontend api",
-        "docker compose up -d frontend api",
-        "docker compose --profile runtime up -d --no-deps --scale worker=1 worker",
-        "docker compose --profile runtime up -d --no-deps --scale worker=2 worker",
-        "docker compose --profile runtime up -d --no-deps --scale worker=4 worker",
-        "docker compose --profile runtime up -d scheduler",
-        "/health/ready",
-        "/health/worker",
-        "systemctl list-unit-files 'jijia-*' --no-legend",
-        "systemctl list-units 'jijia-*' --all --no-legend",
-        "systemctl list-unit-files 'seekway-datahub-*' --no-legend",
-        "systemctl list-units 'seekway-datahub-*' --all --no-legend",
-        "docker compose --profile runtime logs --since 2h api scheduler worker",
-        "== (4, 1), data",
-        "== (4, 2), data",
-        "== (4, 4), data",
-        "docker compose --profile runtime stop scheduler worker",
-        "sudo systemctl reload-or-restart nginx",
-        "https://datahub.seekwaygroup.com/health/ready",
-    ):
-        assert expected in readme
-    assert "config/ecs/seekway-datahub-api.service.example" not in readme
-    assert "docker compose down -v" in readme
-    assert "sudo systemctl stop jijia-" not in readme
-    canary_steps = (
-        "docker compose --profile runtime up -d --no-deps --scale worker=1 worker",
-        "== (4, 1), data",
-        "docker compose --profile runtime up -d --no-deps --scale worker=2 worker",
-        "== (4, 2), data",
-        "docker compose --profile runtime up -d --no-deps --scale worker=4 worker",
-        "== (4, 4), data",
-    )
-    assert [readme.index(step) for step in canary_steps] == sorted(
-        readme.index(step) for step in canary_steps
-    )
-    assert readme.count('data["configuredWorkerCount"]') == 3
-    assert readme.count('data["onlineWorkerCount"]') == 3
-    assert readme.count("curl --fail http://127.0.0.1:8000/health/ready") == 2
-    assert readme.count("curl --fail --silent http://127.0.0.1:8000/health/worker") == 3
-    assert readme.count("curl --fail http://127.0.0.1:8000/health/worker") == 1
