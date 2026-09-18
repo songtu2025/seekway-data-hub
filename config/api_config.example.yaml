@@ -1607,8 +1607,9 @@ apis:
     rate_limit:
       max_requests: 1
       period_seconds: 1
+      cooldown_seconds: 65
     retry:
-      retries: 1
+      retries: 3
       delay_seconds: 1
     params:
       queryDateType: 0

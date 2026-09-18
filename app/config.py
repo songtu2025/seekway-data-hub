@@ -219,7 +219,7 @@ def load_api_configs(path: str | Path) -> list[dict[str, Any]]:
         raise ValueError("API config field 'apis' must be a list")
 
     seen_api_codes = set()
-    endpoint_rate_limits: dict[str, tuple[int, float]] = {}
+    endpoint_rate_limits: dict[str, tuple[int, float, float | None]] = {}
     for index, api in enumerate(apis):
         if not isinstance(api, dict):
             raise ValueError(f"API config item at index {index} must be a mapping")
@@ -266,9 +266,22 @@ def load_api_configs(path: str | Path) -> list[dict[str, Any]]:
             raise ValueError(
                 f"API config {api_code} rate_limit.period_seconds must be greater than zero"
             )
+        cooldown_seconds = rate_config.get("cooldown_seconds")
+        if cooldown_seconds is not None and (
+            isinstance(cooldown_seconds, bool)
+            or not isinstance(cooldown_seconds, (int, float))
+            or cooldown_seconds <= 0
+        ):
+            raise ValueError(
+                f"API config {api_code} rate_limit.cooldown_seconds must be greater than zero"
+            )
         method = str(api.get("method") or "POST").strip().upper()
         endpoint_key = f"{method} /{path_value.strip().lstrip('/')}"
-        endpoint_policy = (max_requests, float(period_seconds))
+        endpoint_policy = (
+            max_requests,
+            float(period_seconds),
+            float(cooldown_seconds) if cooldown_seconds is not None else None,
+        )
         existing_policy = endpoint_rate_limits.setdefault(endpoint_key, endpoint_policy)
         if existing_policy != endpoint_policy:
             raise ValueError(f"API configs sharing endpoint {endpoint_key} must use one rate limit")

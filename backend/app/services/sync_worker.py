@@ -1094,6 +1094,7 @@ class CoreSyncExecutor:
             raise RuntimeError("同步任务接口地址已变更，请重新创建任务")
         api_config = deepcopy(api_config)
         api_config["rate_limit"] = deepcopy(current_api_config["rate_limit"])
+        api_config["retry"] = deepcopy(current_api_config.get("retry") or {})
         if job.market_ids:
             scope = api_config.get("market_scope") or {}
             request_field = str(scope.get("request_field") or "")
@@ -1176,8 +1177,8 @@ class CoreSyncExecutor:
                 status="failed",
                 sync_batch_no=str(result.get("batch_no") or "") or None,
                 progress_json=progress or None,
-                error_code="SYNC_API_FAILED",
-                error_message="同步接口执行失败",
+                error_code=str(result.get("error_code") or "SYNC_API_FAILED"),
+                error_message=str(result.get("error_message") or "同步接口执行失败"),
             )
         if job.job_type == "history_backfill":
             progress = self._complete_history_progress(job, result, progress)

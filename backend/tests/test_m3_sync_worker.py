@@ -1146,7 +1146,7 @@ def test_core_executor_does_not_call_provider_without_shared_lock(
         assert job.attempt_count == 0
 
 
-def test_core_executor_uses_incremental_target_not_history_frozen_end(
+def test_core_executor_uses_current_runtime_policies_and_propagates_rate_limit(
     harness: AuthHarness,
     monkeypatch,
 ) -> None:
@@ -1182,13 +1182,16 @@ def test_core_executor_uses_incremental_target_not_history_frozen_end(
         def test_api_once(self, api_code, _api_client, _token):
             api = next(item for item in self.api_configs if item["api_code"] == api_code)
             captured["rate_limit"] = api["rate_limit"]
+            captured["retry"] = api["retry"]
             engine = AppSyncEngine([api], sync_context=self.context)
             engine._ensure_execution_allowed(api)
             captured["params"] = engine._request_params(api)
             return {
                 "batch_no": "batch-incremental",
-                "failed_count": 0,
+                "failed_count": 1,
                 "request_count": 1,
+                "error_code": "UPSTREAM_RATE_LIMIT",
+                "error_message": "上游接口限流（HTTP 509，业务码 90008），已达到调用频率限制",
             }
 
     def fake_import_module(module_name: str):
@@ -1232,6 +1235,7 @@ def test_core_executor_uses_incremental_target_not_history_frozen_end(
         current_config = load_published_api_config(db, "sale_return_order_page")
     frozen_config = api_config_snapshot(current_config)
     frozen_config["rate_limit"] = {"max_requests": 1, "period_seconds": 9}
+    frozen_config["retry"] = {"retries": 1, "delay_seconds": 9}
     job = SyncJobExecution(
         id=99,
         jijia_account_id=7,
@@ -1255,7 +1259,9 @@ def test_core_executor_uses_incremental_target_not_history_frozen_end(
     heartbeat_calls: list[None] = []
     result = executor.execute(job, lambda: heartbeat_calls.append(None))
 
-    assert result.status == "success"
+    assert result.status == "failed"
+    assert result.error_code == "UPSTREAM_RATE_LIMIT"
+    assert result.error_message == ("上游接口限流（HTTP 509，业务码 90008），已达到调用频率限制")
     assert captured["heartbeats_before_credentials"] == 2
     assert captured["context"].frozen_window_end is None
     assert captured["context"].target_window_end == date(2026, 8, 25)
@@ -1263,6 +1269,7 @@ def test_core_executor_uses_incremental_target_not_history_frozen_end(
     assert captured["params"]["updateTimeEnd"] == "2026-08-25 23:59:59"
     assert captured["params"]["marketIds"] == [101, 202]
     assert captured["rate_limit"] == {"max_requests": 5, "period_seconds": 1}
+    assert captured["retry"] == {"retries": 1, "delay_seconds": 1}
     assert lock_calls == [{"scope": "account", "account_id": 7}]
 
 

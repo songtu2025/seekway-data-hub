@@ -154,6 +154,30 @@ class JijiaApiClientTimeoutTest(unittest.TestCase):
 
         self.assertEqual(limiter.deferrals, [("POST", "/limited/page", 3.0)])
 
+    def test_http_509_defers_endpoint_using_configured_cooldown(self):
+        settings = SimpleNamespace(
+            jijia_base_url="https://example.test",
+            jijia_open_gateway_prefix="/api/open",
+        )
+        limiter = FakeRateLimiter()
+        client = JijiaApiClient(settings, rate_limiter=limiter)
+        client.session = FakeSession([FakeResponse(status_code=509)])
+        config = {
+            "api_code": "limited_api",
+            "method": "POST",
+            "path": "/limited/page",
+            "rate_limit": {
+                "max_requests": 1,
+                "period_seconds": 1,
+                "cooldown_seconds": 65,
+            },
+        }
+
+        with self.assertRaises(HTTPError):
+            client.request(config, AccessToken("token"))
+
+        self.assertEqual(limiter.deferrals, [("POST", "/limited/page", 65.0)])
+
 
 if __name__ == "__main__":
     unittest.main()

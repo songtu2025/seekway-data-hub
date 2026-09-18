@@ -35,8 +35,15 @@ class DateRangeReportsPageConfigTest(unittest.TestCase):
         self.assertEqual(window["days"], 1)
         self.assertEqual(window["lag_days"], 1)
 
-        self.assertEqual(api["rate_limit"], {"max_requests": 1, "period_seconds": 1})
-        self.assertEqual(api["retry"], {"retries": 1, "delay_seconds": 1})
+        self.assertEqual(
+            api["rate_limit"],
+            {
+                "max_requests": 1,
+                "period_seconds": 1,
+                "cooldown_seconds": 65,
+            },
+        )
+        self.assertEqual(api["retry"], {"retries": 3, "delay_seconds": 1})
         self.assertEqual(api["params"], {"queryDateType": 0, "page": 1, "pagesize": 100})
 
 

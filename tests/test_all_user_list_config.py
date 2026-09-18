@@ -34,6 +34,21 @@ class FakeHttpError(RuntimeError):
         self.response = FakeHttpResponse()
 
 
+class FakeRateLimitResponse:
+    status_code = 509
+    text = '{"code":90008,"messages":["fictional-sensitive-message"]}'
+
+    @staticmethod
+    def json():
+        return {"code": 90008, "messages": ["fictional-sensitive-message"]}
+
+
+class FakeRateLimitError(RuntimeError):
+    def __init__(self):
+        super().__init__("fictional-sensitive-detail")
+        self.response = FakeRateLimitResponse()
+
+
 class AllUserListConfigTest(unittest.TestCase):
     def test_all_user_list_is_raw_only_and_stays_disabled(self):
         apis = {api["api_code"]: api for api in load_api_configs("config/api_config.example.yaml")}
@@ -180,6 +195,33 @@ class AllUserListConfigTest(unittest.TestCase):
             failed_params["error_message"],
             "fictional-sensitive-detail",
         )
+
+    def test_sensitive_rate_limit_keeps_only_safe_error_envelope(self):
+        engine = SyncEngine([{"api_code": "all_user_list", "sensitive_response": True}])
+        connection = CapturingConnection()
+        request_error = ApiRequestError(
+            FakeRateLimitError(),
+            "https://example.invalid/allUser/list",
+            "GET",
+            {"fictional": "secret"},
+            1,
+        )
+
+        engine._insert_failed_request(
+            connection,
+            "batch-rate-limit",
+            "all_user_list",
+            request_error,
+        )
+        failed_params = connection.calls[-1][1]
+
+        self.assertIsNone(failed_params["request_params"])
+        self.assertIsNone(failed_params["response_body"])
+        self.assertEqual(
+            failed_params["error_message"],
+            "上游接口限流（HTTP 509，业务码 90008），已达到调用频率限制",
+        )
+        self.assertNotIn("fictional-sensitive", failed_params["error_message"])
 
 
 if __name__ == "__main__":

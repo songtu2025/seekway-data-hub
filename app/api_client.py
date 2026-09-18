@@ -12,6 +12,8 @@ from app.api_rate_limiter import (
 from app.auth import AccessToken
 from app.config import AppSettings
 
+RATE_LIMIT_HTTP_STATUS_CODES = frozenset({429, 509})
+
 
 class JijiaApiClient:
     """积加业务接口客户端。
@@ -65,7 +67,10 @@ class JijiaApiClient:
             response.raise_for_status()
         except HTTPError as error:
             error_response = error.response
-            if error_response is not None and error_response.status_code == 429:
+            if (
+                error_response is not None
+                and error_response.status_code in RATE_LIMIT_HTTP_STATUS_CODES
+            ):
                 self._defer_rate_limit(
                     api_config,
                     method,
@@ -92,7 +97,10 @@ class JijiaApiClient:
                 response.raise_for_status()
             except HTTPError as refresh_error:
                 refresh_response = refresh_error.response
-                if refresh_response is not None and refresh_response.status_code == 429:
+                if (
+                    refresh_response is not None
+                    and refresh_response.status_code in RATE_LIMIT_HTTP_STATUS_CODES
+                ):
                     self._defer_rate_limit(
                         api_config,
                         method,
@@ -142,10 +150,12 @@ class JijiaApiClient:
         if self.rate_limiter is None:
             return
         policy = rate_limit_policy(api_config)
+        rate_config = api_config.get("rate_limit") or {}
+        cooldown_seconds = float(rate_config.get("cooldown_seconds") or policy.period_seconds)
         self.rate_limiter.defer(
             method,
             str(api_config["path"]),
-            retry_after_seconds(retry_after, policy.period_seconds),
+            retry_after_seconds(retry_after, cooldown_seconds),
         )
 
     def request_url(self, api_config: dict[str, Any]) -> str:

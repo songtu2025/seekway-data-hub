@@ -33,6 +33,9 @@ from app.sync_context import (
 logger = logging.getLogger(__name__)
 DATE_PARAM_TEMPLATE_PATTERN = re.compile(r"^\{\{\s*(today|yesterday|days_ago:(\d+))\s*\}\}$")
 SENSITIVE_RESPONSE_ERROR_MESSAGE = "sensitive response details redacted"
+RATE_LIMIT_HTTP_STATUS_CODES = frozenset({429, 509})
+UPSTREAM_RATE_LIMIT_ERROR_CODE = "UPSTREAM_RATE_LIMIT"
+UPSTREAM_RATE_LIMIT_MESSAGE_PREFIX = "上游接口限流（HTTP "
 
 
 @dataclass(frozen=True)
@@ -328,6 +331,8 @@ class SyncEngine:
             "request_count": result["request_count"],
             "failed_count": result["failed_count"],
             "paused": bool(result.get("paused")),
+            "error_code": result.get("error_code"),
+            "error_message": result.get("error_message"),
         }
 
     def sync_enabled_apis(self, api_client: Any, token: Any) -> dict[str, Any]:
@@ -458,6 +463,7 @@ class SyncEngine:
         try:
             if isinstance(error, ApiRequestError):
                 self._insert_failed_request(connection, batch_no, api_code, error)
+            _, error_message = self._failure_details(api_code, error)
             self._insert_api_log(
                 connection,
                 batch_no,
@@ -467,7 +473,7 @@ class SyncEngine:
                 item_count,
                 1,
                 api_started_at,
-                str(error),
+                error_message,
             )
         except DBAPIError as log_error:
             if log_error.connection_invalidated:
@@ -575,7 +581,7 @@ class SyncEngine:
         batch_no: str,
         api_client: Any,
         token: Any,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         """按页短事务同步单个分页接口。
 
         该方法只用于显式配置的宽表接口。HTTP 请求不包在数据库事务里；每页
@@ -592,6 +598,8 @@ class SyncEngine:
         request_count = 0
         failed_count = 0
         paused = False
+        error_code: str | None = None
+        error_message: str | None = None
         last_page = 0
         total_count: int | None = None
         api_started_at = _utc_now()
@@ -660,6 +668,7 @@ class SyncEngine:
         except Exception as error:
             failed_count = 1
             paused = False
+            error_code, error_message = self._failure_details(api_code, error)
             if isinstance(error, ApiRequestError):
                 request_count += error.attempt_count
             with self.engine.begin() as connection:
@@ -674,7 +683,7 @@ class SyncEngine:
                     item_count,
                     failed_count,
                     api_started_at,
-                    str(error),
+                    error_message,
                 )
 
         return {
@@ -682,6 +691,8 @@ class SyncEngine:
             "request_count": request_count,
             "failed_count": failed_count,
             "paused": paused,
+            "error_code": error_code,
+            "error_message": error_message,
         }
 
     def _insert_raw_items_in_page_transaction(
@@ -1233,7 +1244,11 @@ class SyncEngine:
         error_message: str | None = None,
     ) -> None:
         """写入单个 API 在本批次内的执行摘要。"""
-        if error_message is not None and self._has_sensitive_response(api_code):
+        if (
+            error_message is not None
+            and self._has_sensitive_response(api_code)
+            and not error_message.startswith(UPSTREAM_RATE_LIMIT_MESSAGE_PREFIX)
+        ):
             error_message = SENSITIVE_RESPONSE_ERROR_MESSAGE
         connection.execute(
             text(
@@ -2087,7 +2102,7 @@ class SyncEngine:
         response = getattr(error.original_error, "response", None)
         status_code = getattr(response, "status_code", None)
         response_body: str | None = getattr(response, "text", None)
-        error_message = str(error.original_error)
+        _, error_message = self._failure_details(api_code, error)
         request_params: str | None = json.dumps(
             error.request_params,
             ensure_ascii=False,
@@ -2097,7 +2112,6 @@ class SyncEngine:
             # 人员等敏感响应只允许成功时进入 raw_json，失败链路保留状态但不保存正文。
             request_params = None
             response_body = None
-            error_message = SENSITIVE_RESPONSE_ERROR_MESSAGE
         connection.execute(
             text(
                 """
@@ -2127,6 +2141,39 @@ class SyncEngine:
                 "retry_count": error.retry_count,
             },
         )
+
+    def _failure_details(self, api_code: str, error: Exception) -> tuple[str, str]:
+        """返回可展示的稳定错误码和脱敏消息。"""
+        if isinstance(error, ApiRequestError):
+            response = getattr(error.original_error, "response", None)
+            status_code = getattr(response, "status_code", None)
+            if status_code in RATE_LIMIT_HTTP_STATUS_CODES:
+                business_code = self._safe_business_error_code(response)
+                business_suffix = f"，业务码 {business_code}" if business_code else ""
+                return (
+                    UPSTREAM_RATE_LIMIT_ERROR_CODE,
+                    f"上游接口限流（HTTP {status_code}{business_suffix}），已达到调用频率限制",
+                )
+        if self._has_sensitive_response(api_code):
+            return "SYNC_API_FAILED", SENSITIVE_RESPONSE_ERROR_MESSAGE
+        return "SYNC_API_FAILED", str(error)
+
+    @staticmethod
+    def _safe_business_error_code(response: Any) -> str | None:
+        """只提取短数字业务码，不读取或返回响应明细。"""
+        try:
+            payload = response.json()
+        except (AttributeError, TypeError, ValueError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        value = payload.get("code")
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            return None
+        normalized = str(value).strip()
+        if not re.fullmatch(r"[0-9]{1,16}", normalized):
+            return None
+        return normalized
 
     def _has_sensitive_response(self, api_code: str) -> bool:
         """判断接口响应是否需要在失败日志中隐藏正文和原始错误。
