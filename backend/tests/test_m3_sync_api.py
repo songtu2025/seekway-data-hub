@@ -23,6 +23,7 @@ from backend.app.models.sync_records import (
     sync_checkpoint_table,
 )
 from backend.app.models.user import UserRole
+from backend.app.services.m3_common import utc_iso
 from backend.app.services.sync_job_read_service import available_actions
 from backend.app.services.sync_job_service import (
     _active_job_id,
@@ -33,6 +34,10 @@ from backend.app.services.sync_worker import SyncWorker, WorkerResult
 from backend.tests.conftest import AuthHarness
 from backend.tests.test_api_policies_api import create_active_account
 from backend.tests.test_auth_api import register_user
+
+
+def test_utc_iso_accepts_mysql_aggregate_datetime_string() -> None:
+    assert utc_iso("2026-09-18 14:58:59") == "2026-09-18T14:58:59Z"
 
 
 def enable_return_policy(

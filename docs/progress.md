@@ -8350,3 +8350,9 @@
 - 提交 `ce2fb35` 已推送并部署到生产 API、Scheduler 和 Worker；配置发布成功，内外 readiness 与 Nginx 语法检查通过，前端镜像未变更。
 - 生产单日金丝雀只执行 `2021-08-01`：53 页、5235 条、61 次 HTTP 尝试、0 个失败接口、0 条失败请求；批次成功，checkpoint 推进至 `2021-08-02`。
 - 金丝雀任务设置为完成当前窗口后停止，因此任务终态为 `stopped`、批次终态为 `success`，当前无同接口排队或运行任务，未启动全量历史补录。
+
+## 2026-09-18 同步任务预览生产兼容修复
+
+- 单日金丝雀产生首条成功运行时间后，PolarDB 对 `MAX(COALESCE(DATETIME))` 返回字符串；任务预览仍按 `datetime` 读取 `.tzinfo`，导致 `/api/v1/sync-jobs/preview` 返回 500。
+- UTC 时间序列化现在兼容 SQLAlchemy `datetime` 与 MySQL 聚合返回的 ISO 时间字符串，不改变接口字段、数据库结构或前端交互。
+- 针对性 56 项和后端全量测试通过；Ruff、Mypy、compileall、pip check、jscpd、Knip、Vulture、敏感字面量扫描及 `git diff --check` 通过。

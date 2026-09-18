@@ -30,10 +30,13 @@ class CursorBoundary(Protocol):
     def record_id(self) -> int: ...
 
 
-def utc_iso(value: datetime | None) -> str | None:
+def utc_iso(value: datetime | str | None) -> str | None:
     """把数据库中的 UTC DATETIME 明确序列化为带 Z 的字符串。"""
     if value is None:
         return None
+    if isinstance(value, str):
+        # MySQL 聚合函数可能绕过 DateTime 结果处理器并返回 ISO 字符串。
+        value = datetime.fromisoformat(value)
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
     else:
