@@ -148,6 +148,7 @@ describe("接口中心", () => {
     const user = userEvent.setup();
     renderCatalog("/api-catalog?account=8");
     const name = await screen.findByRole("button", { name: connected.name });
+    expect(screen.queryByText("找到所需数据，确认接口状态，再开始同步。")).not.toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("已完成")).toBeInTheDocument();
@@ -161,6 +162,36 @@ describe("接口中心", () => {
       "href",
       "/raw-data?jijiaAccountId=8&apiCode=amazon_shop_page",
     );
+  });
+
+  it("为窄屏接口卡片保留完整状态和操作字段", async () => {
+    const user = userEvent.setup();
+    renderCatalog("/api-catalog?account=8");
+    await screen.findByRole("button", { name: connected.name });
+    const table = screen.getByRole("table");
+    const wrapper = table.closest(".ant-table-wrapper");
+    const labels = Array.from(table.querySelectorAll("tbody td"))
+      .map((cell) => cell.getAttribute("data-label"))
+      .filter(Boolean);
+
+    expect(wrapper).toHaveClass("catalog-responsive-table", "responsive-card-table");
+    expect(labels).toEqual([
+      "接口",
+      "业务域",
+      "平台状态",
+      "账号状态",
+      "最近运行",
+      "原始记录",
+      "操作",
+    ]);
+
+    await user.click(screen.getByRole("tab", { name: "官方接口目录" }));
+    await screen.findByRole("button", { name: official.name });
+    const officialTable = screen.getByRole("table");
+    const officialLabels = Array.from(officialTable.querySelectorAll("tbody td"))
+      .map((cell) => cell.getAttribute("data-label"))
+      .filter(Boolean);
+    expect(officialLabels).toEqual(["接口", "业务域", "系统支持", "接入条件", "操作"]);
   });
 
   it("URL恢复账号、搜索与详情，Viewer不出现配置和创建操作", async () => {

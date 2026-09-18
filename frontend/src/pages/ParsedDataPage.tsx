@@ -8,6 +8,7 @@ import { AppShell } from "../components/AppShell";
 import { CursorPagination } from "../components/CursorPagination";
 import { DataSyncPanel } from "../components/DataSyncPanel";
 import { RefreshStatus } from "../components/RefreshStatus";
+import { responsiveTableCell } from "../components/responsiveTable";
 import { useCursorPagination } from "../hooks/useCursorPagination";
 import { getApiErrorMessage } from "./m3Utils";
 
@@ -182,6 +183,7 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
     title: column.label,
     key: column.label,
     width: index === 0 ? 220 : 170,
+    onCell: () => responsiveTableCell(column.label, index === 0 ? "full" : undefined),
     render: (_, item) => {
       const values = column.keys.map((key) => displayValue(item.fields[key]));
       const content = (
@@ -207,6 +209,7 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
     title: "操作",
     key: "actions",
     width: 140,
+    onCell: () => responsiveTableCell("操作", "full"),
     render: (_, item) => (
       <Link
         className="m3-link"
@@ -233,6 +236,7 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
         <DataSyncPanel
           accounts={accounts}
           apiCode={config.apiCode}
+          displayName={config.title}
           loadedCount={items.length}
           selectedAccountId={selectedAccountId}
           onSynced={refreshCurrentData}
@@ -313,6 +317,7 @@ export function ParsedDataPage({ dataset }: { dataset: ParsedDataset }) {
           </div>
           <Table<ParsedDataItem>
             aria-label={`${config.title}列表`}
+            className="parsed-data-table responsive-card-table"
             columns={columns}
             dataSource={items}
             loading={{

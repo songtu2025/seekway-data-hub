@@ -385,9 +385,8 @@ function AccountPoliciesContent() {
             同步接口
           </Link>
         </nav>
-        <p>
-          管理接口可用范围。执行周期统一在同步任务中配置。{" "}
-          <Link to={`/jobs/plans?account=${accountId}`}>查看定时计划</Link>
+        <p className="policy-page-description">
+          执行周期在<Link to={`/jobs/plans?account=${accountId}`}>定时计划</Link>中配置。
         </p>
         <section aria-label="同步接口筛选" className="policy-summary">
           {summaryItems.map((item) => (
@@ -447,7 +446,6 @@ function AccountPoliciesContent() {
               全选当前结果
             </Button>
           ) : null}
-          <span>{canEdit ? "选择接口后可批量设置" : "只读权限"}</span>
         </section>
         {canEdit && selectedCodes.size > 0 && !loading ? (
           <section className="policy-bulk-bar policy-schedule-bar" aria-label="批量策略操作">
@@ -522,7 +520,6 @@ function AccountPoliciesContent() {
             <div>
               <span>配置可用</span>
               <strong>{enabledCount} 个接口已启用</strong>
-              <p>需要立即执行时，进入任务预览确认日期范围。</p>
             </div>
             <Link
               className="action-link action-link--primary"

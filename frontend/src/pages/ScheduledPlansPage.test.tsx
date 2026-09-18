@@ -85,6 +85,12 @@ describe("独立定时计划列表", () => {
     expect(await screen.findByText("接口 10 · api_10")).toBeInTheDocument();
     expect(screen.queryByText("接口 0 · api_0")).not.toBeInTheDocument();
     const editLink = screen.getByRole("link", { name: "修改计划" });
+    expect(editLink.closest(".ant-table-wrapper")).toHaveClass(
+      "scheduled-plans-table",
+      "responsive-card-table",
+    );
+    expect(editLink.closest("td")).toHaveAttribute("data-label", "操作");
+    expect(editLink.closest("td")).toHaveAttribute("data-card-width", "full");
     // 数据行可能先于加载遮罩退出动画出现，等待真实可交互状态。
     await waitFor(() => {
       expect(editLink.closest(".ant-spin-blur")).toBeNull();

@@ -171,6 +171,9 @@ describe("成员与权限页", () => {
     expect((await screen.findAllByText("admin@example.com")).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: /邀请成员/ }));
+    expect(
+      screen.getByText("将向该邮箱发送一次性注册链接；过期后可重新发送。"),
+    ).toBeInTheDocument();
     await user.type(screen.getByLabelText("邮箱"), "viewer@example.com");
     await user.click(screen.getByLabelText("角色"));
     const inviteRoleOption = await waitFor(() => {
@@ -600,6 +603,7 @@ describe("成员与权限页", () => {
     expect(invitationsButton).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     expect(screen.queryByText("viewer@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("固定角色 · 至少保留 1 名可用管理员")).not.toBeInTheDocument();
     const adminRow = screen.getByRole("button", { name: /admin@example.com/ });
     expect(within(adminRow).getByText("已启用")).toHaveClass("badge", "status-active");
     expect(screen.queryByLabelText("固定角色说明")).not.toBeInTheDocument();
@@ -610,6 +614,8 @@ describe("成员与权限页", () => {
     expect(screen.getByRole("button", { name: /expired@example.com，已过期/ })).toBeInTheDocument();
     expect(membersButton).toHaveAttribute("aria-pressed", "false");
     expect(invitationsButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("邀请状态按有效期与使用结果自动判断")).not.toBeInTheDocument();
+    expect(screen.queryByText("接受后立即按该固定角色生效")).not.toBeInTheDocument();
 
     expect(stylesSource).not.toMatch(
       /\.member-row \.status-(?:active|invited|disabled)[^}]*display:\s*none/,
@@ -744,8 +750,8 @@ describe("成员与权限页", () => {
 
     expect(screen.getByLabelText("当前角色")).toBeDisabled();
     expect(screen.getByRole("button", { name: "保存角色" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "停用成员" })).toBeDisabled();
-    expect(screen.getByText("至少保留 1 名可用管理员")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "停用成员" })).not.toBeInTheDocument();
+    expect(screen.queryByText("至少保留 1 名可用管理员")).not.toBeInTheDocument();
   });
 
   it("撤销邀请必须确认并展示对象与影响", async () => {

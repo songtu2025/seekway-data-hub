@@ -6,6 +6,7 @@ import { api } from "../api/client";
 import type { ScheduledPlan } from "../api/types";
 import { formatDate, getApiErrorMessage, statusLabel } from "../pages/m3Utils";
 import { RefreshStatus } from "./RefreshStatus";
+import { responsiveTableCell } from "./responsiveTable";
 import {
   blockedResumeText,
   nextWindowBasisText,
@@ -35,6 +36,7 @@ function planColumns(returnTo: string, returnState: unknown): TableColumnsType<S
       title: "账号与接口",
       key: "account",
       width: 150,
+      onCell: () => responsiveTableCell("账号与接口", "full"),
       render: (_, plan) => (
         <div className="table-cell-stack">
           <strong>{plan.accountName}</strong>
@@ -48,6 +50,7 @@ function planColumns(returnTo: string, returnState: unknown): TableColumnsType<S
       title: "执行计划",
       key: "schedule",
       width: 135,
+      onCell: () => responsiveTableCell("执行计划", "full"),
       render: (_, plan) => (
         <div className="table-cell-stack">
           <strong>
@@ -64,6 +67,7 @@ function planColumns(returnTo: string, returnState: unknown): TableColumnsType<S
       title: "预计下次数据范围",
       key: "nextWindowPreview",
       width: 185,
+      onCell: () => responsiveTableCell("预计下次数据范围", "full"),
       render: (_, plan) => (
         <div className="table-cell-stack">
           <strong>{nextWindowRangeText(plan.nextWindowPreview)}</strong>
@@ -75,6 +79,7 @@ function planColumns(returnTo: string, returnState: unknown): TableColumnsType<S
       title: "同步进度",
       key: "progress",
       width: 135,
+      onCell: () => responsiveTableCell("同步进度"),
       render: (_, plan) => {
         const [completeText, nextText] = syncProgressText(plan.nextWindowPreview);
         return (
@@ -89,6 +94,7 @@ function planColumns(returnTo: string, returnState: unknown): TableColumnsType<S
       title: "状态",
       key: "status",
       width: 155,
+      onCell: () => responsiveTableCell("状态"),
       render: (_, plan) => {
         const resumeText = blockedResumeText(plan);
         return (
@@ -265,13 +271,14 @@ export function ScheduledPlansPanel({
       {error ? <Alert title={error} type={plans.length > 0 ? "warning" : "error"} /> : null}
       <Table<ScheduledPlan>
         aria-label="定时计划列表"
-        className="scheduled-plans-table"
+        className="scheduled-plans-table responsive-card-table"
         columns={[
           ...planColumns(returnTo, returnState),
           {
             title: "操作",
             key: "actions",
             width: 90,
+            onCell: () => responsiveTableCell("操作", "full"),
             render: (_, plan) => (
               <div className="table-cell-stack">
                 <Link

@@ -14,6 +14,7 @@ const authState = vi.hoisted(() => ({
 const apiState = vi.hoisted(() => ({
   getWorkerRuntime: vi.fn(),
 }));
+const scrollIntoView = vi.fn();
 
 vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/client")>();
@@ -40,6 +41,11 @@ vi.mock("../auth/AuthContext", () => ({
 
 describe("应用外壳退出", () => {
   beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    scrollIntoView.mockClear();
     authState.logout.mockReset();
     authState.role = "operator";
     apiState.getWorkerRuntime.mockReset();
@@ -297,6 +303,28 @@ describe("应用外壳退出", () => {
     expect(within(navigation).getByRole("link", { name: "FBA 库存" })).toBeInTheDocument();
     expect(within(navigation).getByRole("link", { name: "FBA 仓库" })).toBeInTheDocument();
     expect(within(navigation).getByRole("link", { name: "原始数据" })).toBeInTheDocument();
+  });
+
+  it("将当前一级和二级导航项保持在横向可视区", async () => {
+    render(
+      <MemoryRouter initialEntries={["/raw-data"]}>
+        <AppShell>
+          <p>原始数据</p>
+        </AppShell>
+      </MemoryRouter>,
+    );
+
+    const mainNavigation = screen.getByRole("navigation", { name: "主导航" });
+    const sectionNavigation = screen.getByRole("navigation", { name: "数据中心导航" });
+    const mainCurrent = within(mainNavigation).getByRole("link", { name: "数据中心" });
+    const sectionCurrent = within(sectionNavigation).getByRole("link", { name: "原始数据" });
+
+    await waitFor(() => {
+      expect(scrollIntoView.mock.instances).toEqual(
+        expect.arrayContaining([mainCurrent, sectionCurrent]),
+      );
+    });
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "center" });
   });
 
   it("退出失败显示可重试错误并恢复按钮，重试成功后进入登录页", async () => {

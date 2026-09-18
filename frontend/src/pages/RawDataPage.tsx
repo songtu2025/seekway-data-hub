@@ -7,6 +7,7 @@ import type { JijiaAccount, RawDataSummary } from "../api/types";
 import { AppShell } from "../components/AppShell";
 import { CursorPagination } from "../components/CursorPagination";
 import { RefreshStatus } from "../components/RefreshStatus";
+import { responsiveTableCell } from "../components/responsiveTable";
 import { useCursorPagination, type CursorPaginationState } from "../hooks/useCursorPagination";
 import {
   formatDate,
@@ -373,6 +374,7 @@ export function RawDataPage() {
       title: "接口",
       key: "api",
       width: 220,
+      onCell: () => responsiveTableCell("接口", "full"),
       render: (_, row) => (
         <div className="table-cell-stack">
           <Link
@@ -397,6 +399,7 @@ export function RawDataPage() {
       dataIndex: "sourcePrimaryKey",
       key: "sourcePrimaryKey",
       width: 180,
+      onCell: () => responsiveTableCell("业务主键", "full"),
       render: (value: RawDataSummary["sourcePrimaryKey"]) => value ?? "—",
     },
     {
@@ -404,12 +407,14 @@ export function RawDataPage() {
       dataIndex: "dataDate",
       key: "dataDate",
       width: 130,
+      onCell: () => responsiveTableCell("数据日期"),
       render: (value: RawDataSummary["dataDate"]) => value ?? "—",
     },
     {
       title: "观察情况",
       key: "observations",
       width: 150,
+      onCell: () => responsiveTableCell("观察情况"),
       render: (_, row) => (
         <div className="table-cell-stack">
           <span>{row.observationCount ?? "—"} 次</span>
@@ -421,6 +426,7 @@ export function RawDataPage() {
       title: "最后观察",
       key: "lastObservedAt",
       width: 190,
+      onCell: () => responsiveTableCell("最后观察", "full"),
       render: (_, row) => formatDate(row.lastObservedAt ?? row.updatedAt),
     },
     {
@@ -428,6 +434,7 @@ export function RawDataPage() {
       dataIndex: "batchNo",
       key: "batchNo",
       width: 200,
+      onCell: () => responsiveTableCell("当前批次", "full"),
       render: (value: RawDataSummary["batchNo"]) => <code>{value ?? "—"}</code>,
     },
   ];
@@ -702,6 +709,7 @@ export function RawDataPage() {
           </div>
           <Table<RawDataSummary>
             aria-label="原始数据当前快照列表"
+            className="responsive-card-table raw-data-table"
             columns={columns}
             dataSource={rows}
             loading={{

@@ -109,6 +109,38 @@ describe("同步任务列表", () => {
     expect(screen.getByRole("heading", { name: "任务记录" })).toBeInTheDocument();
   });
 
+  it("为窄屏任务卡片提供完整字段标签", async () => {
+    vi.mocked(api.listSyncJobs).mockResolvedValue({ items: [syncJob(1)] });
+    render(
+      <MemoryRouter>
+        <SyncJobsPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("link", { name: "任务 #1" });
+    const table = screen.getByRole("table", { name: "同步任务列表" });
+    const wrapper = table.closest(".ant-table-wrapper");
+    const labels = Array.from(table.querySelectorAll("tbody td"))
+      .map((cell) => cell.getAttribute("data-label"))
+      .filter(Boolean);
+
+    expect(wrapper).toHaveClass("responsive-card-table");
+    expect(labels).toEqual([
+      "任务",
+      "接口",
+      "同步范围",
+      "完整进度",
+      "状态",
+      "创建时间",
+      "最近更新",
+      "下一步",
+    ]);
+    expect(table.querySelector('td[data-label="下一步"]')).toHaveAttribute(
+      "data-card-width",
+      "full",
+    );
+  });
+
   it("展示常驻 Worker 在线状态", async () => {
     render(
       <MemoryRouter>

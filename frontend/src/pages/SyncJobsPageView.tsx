@@ -18,6 +18,7 @@ import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { CursorPagination } from "../components/CursorPagination";
 import { RefreshStatus } from "../components/RefreshStatus";
+import { responsiveTableCell } from "../components/responsiveTable";
 import { SyncJobProgressSummary } from "../components/SyncJobReadModel";
 import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
 import { useCursorPagination } from "../hooks/useCursorPagination";
@@ -413,6 +414,7 @@ export function SyncJobsPage() {
     {
       title: "任务",
       key: "task",
+      onCell: () => responsiveTableCell("任务", "full"),
       render: (_, job) => (
         <div className="table-cell-stack">
           <Link
@@ -439,6 +441,7 @@ export function SyncJobsPage() {
       title: "接口",
       key: "api",
       className: "job-api-cell",
+      onCell: () => responsiveTableCell("接口", "full"),
       render: (_, job) => (
         <div className="table-cell-stack">
           <strong>{job.apiName ?? job.apiCode}</strong>
@@ -449,6 +452,7 @@ export function SyncJobsPage() {
     {
       title: "同步范围",
       key: "range",
+      onCell: () => responsiveTableCell("同步范围", "full"),
       render: (_, job) =>
         job.taskStart && job.taskEnd
           ? `${job.taskStart} 至 ${job.taskEnd}`
@@ -457,11 +461,13 @@ export function SyncJobsPage() {
     {
       title: "完整进度",
       key: "progress",
+      onCell: () => responsiveTableCell("完整进度"),
       render: (_, job) => <SyncJobProgressSummary job={job} />,
     },
     {
       title: "状态",
       key: "status",
+      onCell: () => responsiveTableCell("状态"),
       render: (_, job) => {
         const taskStatus = getTaskStatus(job);
         return (
@@ -477,11 +483,13 @@ export function SyncJobsPage() {
     {
       title: "创建时间",
       key: "taskCreatedAt",
+      onCell: () => responsiveTableCell("创建时间"),
       render: (_, job) => formatDate(job.taskCreatedAt ?? job.createdAt),
     },
     {
       title: "最近更新",
       key: "lastUpdatedAt",
+      onCell: () => responsiveTableCell("最近更新"),
       render: (_, job) =>
         formatDate(
           job.lastUpdatedAt ?? job.finishedAt ?? job.heartbeatAt ?? job.startedAt ?? job.createdAt,
@@ -492,6 +500,7 @@ export function SyncJobsPage() {
       key: "action",
       fixed: "right",
       width: 112,
+      onCell: () => responsiveTableCell("下一步", "full"),
       render: (_, job) => (
         <Link
           className="m3-link"
@@ -729,7 +738,7 @@ export function SyncJobsPage() {
           <Spin description="正在加载任务…" spinning={loading}>
             <Table<SyncJob>
               aria-label="同步任务列表"
-              className="jobs-table"
+              className="jobs-table responsive-card-table"
               columns={columns}
               dataSource={jobs}
               rowKey={jobRowKey}

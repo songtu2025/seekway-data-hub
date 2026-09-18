@@ -238,6 +238,12 @@ describe("数据中心通用解析页", () => {
     );
 
     const storeLink = await screen.findByRole("link", { name: "查看原始记录" });
+    expect(storeLink.closest(".ant-table-wrapper")).toHaveClass(
+      "parsed-data-table",
+      "responsive-card-table",
+    );
+    expect(storeLink.closest("td")).toHaveAttribute("data-label", "操作");
+    expect(storeLink.closest("td")).toHaveAttribute("data-card-width", "full");
     expect(storeLink).toHaveAttribute("href", "/raw-data/91");
     expect(screen.queryByRole("link", { name: /北美旗舰店/ })).not.toBeInTheDocument();
     expect(screen.getByText("北美旗舰店")).toBeInTheDocument();

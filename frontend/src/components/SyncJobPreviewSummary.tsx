@@ -102,7 +102,7 @@ export function JobReview({
         <h2 id="job-review-heading" ref={headingRef} tabIndex={-1}>
           检查并创建
         </h2>
-        <p>请确认目标与数据范围。创建后任务会进入后台队列。</p>
+        <p>创建后任务进入后台队列。</p>
       </header>
       <dl className="job-review-summary">
         <ReviewItem label="积加账号" value={accountName} />

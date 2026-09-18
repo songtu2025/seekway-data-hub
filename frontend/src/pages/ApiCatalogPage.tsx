@@ -7,6 +7,7 @@ import type { ApiCatalogItem, ApiPolicy, JijiaAccount, OfficialApiCatalogItem } 
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
+import { responsiveTableCell } from "../components/responsiveTable";
 import { businessDomainKey, businessDomainLabel } from "../businessDomains";
 import { buildPolicyUpdate } from "../policyUtils";
 import { ConnectedCatalogDetail, OfficialCatalogDetail } from "./ApiCatalogDetails";
@@ -429,6 +430,7 @@ export function ApiCatalogPage() {
       title: "接口",
       key: "name",
       width: 260,
+      onCell: () => responsiveTableCell("接口", "full"),
       render: (_, item) => (
         <div className="catalog-name-cell">
           <Button type="link" onClick={() => updateQuery({ api: item.apiCode })}>
@@ -442,12 +444,14 @@ export function ApiCatalogPage() {
       title: "业务域",
       key: "domain",
       width: 100,
+      onCell: () => responsiveTableCell("业务域"),
       render: (_, item) => businessDomainLabel(businessDomainKey(item)),
     },
     {
       title: "平台状态",
       key: "platform",
       width: 110,
+      onCell: () => responsiveTableCell("平台状态"),
       render: (_, item) => (
         <Tag color={item.platformEnabled ? "success" : "default"}>
           {item.platformEnabled ? "平台启用" : "平台停用"}
@@ -458,6 +462,7 @@ export function ApiCatalogPage() {
       title: "账号状态",
       key: "account",
       width: 180,
+      onCell: () => responsiveTableCell("账号状态"),
       render: (_, item) => {
         if (!accountId) return <span className="muted-copy">选择账号后查看</span>;
         const policy = policiesByCode.get(item.apiCode);
@@ -483,6 +488,7 @@ export function ApiCatalogPage() {
       title: "最近运行",
       key: "run",
       width: 175,
+      onCell: () => responsiveTableCell("最近运行"),
       render: (_, item) => (
         <div className="catalog-run-cell">
           {item.recentRunStatus ? (
@@ -503,12 +509,14 @@ export function ApiCatalogPage() {
       key: "records",
       width: 100,
       align: "right",
+      onCell: () => responsiveTableCell("原始记录"),
       render: (_, item) => (item.rawRecordCount ?? 0).toLocaleString(),
     },
     {
       title: "操作",
       key: "action",
       width: canEdit ? 220 : 80,
+      onCell: () => responsiveTableCell("操作", "full"),
       render: (_, item) => (
         <div className="catalog-row-actions">
           <Button type="link" onClick={() => updateQuery({ api: item.apiCode })}>
@@ -524,6 +532,7 @@ export function ApiCatalogPage() {
       title: "接口",
       key: "name",
       width: 300,
+      onCell: () => responsiveTableCell("接口", "full"),
       render: (_, item) => (
         <div className="catalog-name-cell">
           <Button type="link" onClick={() => updateQuery({ doc: String(item.docId ?? item.path) })}>
@@ -539,12 +548,14 @@ export function ApiCatalogPage() {
       title: "业务域",
       key: "domain",
       width: 130,
+      onCell: () => responsiveTableCell("业务域"),
       render: (_, item) => businessDomainLabel(officialDomain(item)),
     },
     {
       title: "系统支持",
       key: "support",
       width: 110,
+      onCell: () => responsiveTableCell("系统支持"),
       render: (_, item) => (
         <Tag color={item.systemConfigured ? "success" : "default"}>
           {item.systemConfigured ? "已接入" : "待接入"}
@@ -555,6 +566,7 @@ export function ApiCatalogPage() {
       title: "接入条件",
       key: "conditions",
       width: 300,
+      onCell: () => responsiveTableCell("接入条件", "full"),
       render: (_, item) => (
         <div className="catalog-run-cell">
           <span>{classificationLabel(item.classification)}</span>
@@ -566,6 +578,7 @@ export function ApiCatalogPage() {
       title: "操作",
       key: "action",
       width: 100,
+      onCell: () => responsiveTableCell("操作", "full"),
       render: (_, item) => (
         <Button type="link" onClick={() => updateQuery({ doc: String(item.docId ?? item.path) })}>
           详情
@@ -604,7 +617,6 @@ export function ApiCatalogPage() {
         <header className="page-heading">
           <div>
             <h1>接口中心</h1>
-            <p className="muted-copy">找到所需数据，确认接口状态，再开始同步。</p>
           </div>
           {view === "connected" && (
             <label className="catalog-account">
@@ -637,61 +649,68 @@ export function ApiCatalogPage() {
           aria-label={view === "connected" ? "已接入接口列表" : "官方接口列表"}
         >
           <div className="catalog-toolbar" aria-label="接口目录工具栏">
-            <label className="catalog-search">
-              <span>搜索接口</span>
-              <Input.Search
-                aria-label="搜索接口"
-                placeholder="搜索名称、编码或路径"
-                value={search}
-                allowClear
-                onChange={(event) => updateQuery({ q: event.target.value }, true, true)}
-              />
-            </label>
-            <label>
-              <span>业务域</span>
-              <Select
-                aria-label="业务域"
-                value={domain}
-                virtual={false}
-                options={[
-                  { label: "全部业务域", value: "" },
-                  ...domains.map((value) => ({ label: businessDomainLabel(value), value })),
-                ]}
-                onChange={(value) => updateQuery({ domain: value }, true)}
-              />
-            </label>
-            <label>
-              <span>{view === "connected" ? "平台状态" : "系统支持"}</span>
-              <Select
-                aria-label={view === "connected" ? "平台状态" : "系统支持"}
-                value={platform}
-                virtual={false}
-                options={[
-                  { label: "全部状态", value: "" },
-                  { label: view === "connected" ? "平台启用" : "已接入", value: "enabled" },
-                  { label: view === "connected" ? "平台停用" : "待接入", value: "disabled" },
-                ]}
-                onChange={(value) => updateQuery({ platform: value }, true)}
-              />
-            </label>
-            <Button
-              onClick={() => updateQuery({ q: "", domain: "", platform: "", status: "" }, true)}
-            >
-              重置
-            </Button>
-            <RefreshStatus
-              failedWithPreviousData={Boolean(error && hasPreviousResult)}
-              lastUpdatedAt={lastCheckedAt}
-              refreshing={refreshing}
-            />
-            <Button
-              aria-label="刷新"
-              disabled={loading || refreshing}
-              loading={refreshing}
-              onClick={refreshCurrentView}
-            >
-              刷新
-            </Button>
+            <div className="catalog-filter-grid">
+              <label className="catalog-search">
+                <span>搜索接口</span>
+                <Input.Search
+                  aria-label="搜索接口"
+                  placeholder="搜索名称、编码或路径"
+                  value={search}
+                  allowClear
+                  onChange={(event) => updateQuery({ q: event.target.value }, true, true)}
+                />
+              </label>
+              <label>
+                <span>业务域</span>
+                <Select
+                  aria-label="业务域"
+                  value={domain}
+                  virtual={false}
+                  options={[
+                    { label: "全部业务域", value: "" },
+                    ...domains.map((value) => ({ label: businessDomainLabel(value), value })),
+                  ]}
+                  onChange={(value) => updateQuery({ domain: value }, true)}
+                />
+              </label>
+              <label>
+                <span>{view === "connected" ? "平台状态" : "系统支持"}</span>
+                <Select
+                  aria-label={view === "connected" ? "平台状态" : "系统支持"}
+                  value={platform}
+                  virtual={false}
+                  options={[
+                    { label: "全部状态", value: "" },
+                    { label: view === "connected" ? "平台启用" : "已接入", value: "enabled" },
+                    { label: view === "connected" ? "平台停用" : "待接入", value: "disabled" },
+                  ]}
+                  onChange={(value) => updateQuery({ platform: value }, true)}
+                />
+              </label>
+            </div>
+            <div className="catalog-toolbar-actions">
+              <Button
+                type="text"
+                onClick={() => updateQuery({ q: "", domain: "", platform: "", status: "" }, true)}
+              >
+                重置
+              </Button>
+              <div className="catalog-toolbar-refresh">
+                <RefreshStatus
+                  failedWithPreviousData={Boolean(error && hasPreviousResult)}
+                  lastUpdatedAt={lastCheckedAt}
+                  refreshing={refreshing}
+                />
+                <Button
+                  aria-label="刷新"
+                  disabled={loading || refreshing}
+                  loading={refreshing}
+                  onClick={refreshCurrentView}
+                >
+                  刷新
+                </Button>
+              </div>
+            </div>
           </div>
           {view === "connected" ? (
             <>
@@ -750,6 +769,7 @@ export function ApiCatalogPage() {
           {!error || hasPreviousResult ? (
             view === "connected" ? (
               <Table
+                className="catalog-responsive-table responsive-card-table"
                 size="middle"
                 rowKey="apiCode"
                 columns={connectedColumns}
@@ -761,6 +781,7 @@ export function ApiCatalogPage() {
               />
             ) : (
               <Table
+                className="catalog-responsive-table responsive-card-table"
                 size="middle"
                 rowKey={(item) => `${item.docId}-${item.path}`}
                 columns={officialColumns}

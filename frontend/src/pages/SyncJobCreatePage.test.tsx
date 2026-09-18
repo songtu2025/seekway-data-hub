@@ -330,6 +330,10 @@ describe("创建同步任务页", () => {
     await user.click(screen.getByRole("button", { name: "预览执行计划" }));
     const reviewHeading = await screen.findByRole("heading", { name: "检查并创建" });
     await waitFor(() => expect(reviewHeading).toHaveFocus());
+    expect(screen.getByText("创建后任务进入后台队列。")).toBeInTheDocument();
+    expect(
+      screen.queryByText("请确认目标与数据范围。创建后任务会进入后台队列。"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("积加账号")).not.toBeInTheDocument();
     expect(screen.getByText("该接口将同步此账号可访问的全部店铺")).toBeInTheDocument();
     expect(screen.getByText("补齐历史至今")).toBeInTheDocument();

@@ -8,6 +8,7 @@ import { AppShell } from "../components/AppShell";
 import { CursorPagination } from "../components/CursorPagination";
 import { DataSyncPanel } from "../components/DataSyncPanel";
 import { RefreshStatus } from "../components/RefreshStatus";
+import { responsiveTableCell } from "../components/responsiveTable";
 import { useCursorPagination } from "../hooks/useCursorPagination";
 import { getApiErrorMessage } from "./m3Utils";
 
@@ -199,12 +200,14 @@ export function SaleReturnOrdersPage() {
       dataIndex: "returnDateTime",
       key: "returnDateTime",
       width: 180,
+      onCell: () => responsiveTableCell("退货时间"),
       render: (value: SaleReturnOrder["returnDateTime"]) => marketDateTime(value),
     },
     {
       title: "订单与商品",
       key: "order",
       width: 280,
+      onCell: () => responsiveTableCell("订单与商品", "full"),
       render: (_, order) => (
         <div className="table-cell-stack">
           <Button type="link" onClick={() => setSelectedOrder(order)}>
@@ -220,6 +223,7 @@ export function SaleReturnOrdersPage() {
       title: "数量与状态",
       key: "quantity",
       width: 150,
+      onCell: () => responsiveTableCell("数量与状态"),
       render: (_, order) => (
         <div className="table-cell-stack">
           <strong>{order.quantity ?? "—"}</strong>
@@ -232,12 +236,14 @@ export function SaleReturnOrdersPage() {
       dataIndex: "disposition",
       key: "disposition",
       width: 150,
+      onCell: () => responsiveTableCell("库存属性"),
       render: (value: SaleReturnOrder["disposition"]) => value ?? "—",
     },
     {
       title: "原因与仓库",
       key: "reason",
       width: 230,
+      onCell: () => responsiveTableCell("原因与仓库", "full"),
       render: (_, order) => (
         <div className="table-cell-stack">
           {order.reason ?? "—"}
@@ -250,6 +256,7 @@ export function SaleReturnOrdersPage() {
       title: "操作",
       key: "actions",
       width: 110,
+      onCell: () => responsiveTableCell("操作", "full"),
       render: (_, order) => (
         <Button type="link" onClick={() => setSelectedOrder(order)}>
           查看详情
@@ -269,6 +276,7 @@ export function SaleReturnOrdersPage() {
         <DataSyncPanel
           accounts={accounts}
           apiCode={SALE_RETURN_API_CODE}
+          displayName="退货订单"
           loadedCount={orders.length}
           selectedAccountId={selectedFilters.accountId}
           onSynced={refreshCurrentData}
@@ -437,6 +445,7 @@ export function SaleReturnOrdersPage() {
           </div>
           <Table<SaleReturnOrder>
             aria-label="退货订单当前记录列表"
+            className="sale-return-table responsive-card-table"
             columns={columns}
             dataSource={orders}
             loading={{

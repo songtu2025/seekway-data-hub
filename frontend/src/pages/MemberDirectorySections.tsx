@@ -63,11 +63,6 @@ export function MemberToolbar({
         value={state.search}
         onChange={(event) => actions.changeSearch(event.target.value)}
       />
-      <span>
-        {state.view === "members"
-          ? "固定角色 · 至少保留 1 名可用管理员"
-          : "邀请状态按有效期与使用结果自动判断"}
-      </span>
     </section>
   );
 }
@@ -216,19 +211,18 @@ export function MemberWorkspace({
                   : " 保存后立即生效。"}
               </p>
             </div>
-            <div className="member-danger-row">
-              <span>
-                {protectsLastAdmin ? "至少保留 1 名可用管理员" : "停用后该账号的会话会失效"}
-              </span>
-              <Button
-                danger={selectedUser.status !== "disabled"}
-                disabled={busy || writeDisabled || protectsLastAdmin}
-                loading={busy}
-                onClick={actions.toggleStatus}
-              >
-                {selectedUser.status === "disabled" ? "启用成员" : "停用成员"}
-              </Button>
-            </div>
+            {!protectsLastAdmin ? (
+              <div className="member-danger-row">
+                <Button
+                  danger={selectedUser.status !== "disabled"}
+                  disabled={busy || writeDisabled}
+                  loading={busy}
+                  onClick={actions.toggleStatus}
+                >
+                  {selectedUser.status === "disabled" ? "启用成员" : "停用成员"}
+                </Button>
+              </div>
+            ) : null}
           </>
         ) : (
           <Empty
@@ -334,7 +328,6 @@ export function InvitationWorkspace({
             </div>
             <div className="detail-section-heading">
               <strong>邀请权限</strong>
-              <span>接受后立即按该固定角色生效</span>
             </div>
             <div className="permission-card">
               <h3>{roleNames[selectedInvitationRow.invitation.role]}权限</h3>

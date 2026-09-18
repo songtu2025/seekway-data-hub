@@ -16,6 +16,7 @@ import { api } from "../api/client";
 import type { AuditLog, JijiaAccount } from "../api/types";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
+import { responsiveTableCell } from "../components/responsiveTable";
 import { formatDate, getApiErrorMessage, timeZoneNote } from "./m3Utils";
 
 interface AuditFilters {
@@ -263,6 +264,7 @@ export function AuditPage() {
       title: "时间与操作者",
       key: "actor",
       width: 210,
+      onCell: () => responsiveTableCell("时间与操作者", "full"),
       render: (_, log) => (
         <div className="table-cell-stack">
           {formatDate(log.createdAt)}
@@ -274,6 +276,7 @@ export function AuditPage() {
       title: "操作",
       key: "action",
       width: 220,
+      onCell: () => responsiveTableCell("操作", "full"),
       render: (_, log) => (
         <div className="table-cell-stack">
           <span>{actionLabel(log.action)}</span>
@@ -286,6 +289,7 @@ export function AuditPage() {
       title: "资源",
       key: "resource",
       width: 180,
+      onCell: () => responsiveTableCell("资源"),
       render: (_, log) => {
         const path = resourcePath(log);
         const label = `${resourceLabel(log.resourceType)}${log.resourceId ? ` #${log.resourceId}` : ""}`;
@@ -303,6 +307,7 @@ export function AuditPage() {
       dataIndex: "result",
       key: "result",
       width: 100,
+      onCell: () => responsiveTableCell("结果"),
       render: (result: AuditLog["result"]) => (
         <Tag color={result === "success" ? "success" : "error"}>
           {result === "success" ? "成功" : "失败"}
@@ -313,6 +318,7 @@ export function AuditPage() {
       title: "详情",
       key: "details",
       width: 110,
+      onCell: () => responsiveTableCell("详情", "full"),
       render: (_, log) => (
         <Button type="link" onClick={() => setSelectedLog(log)}>
           查看详情
@@ -471,6 +477,8 @@ export function AuditPage() {
             </div>
           </div>
           <Table<AuditLog>
+            aria-label="审计日志列表"
+            className="audit-responsive-table responsive-card-table"
             columns={columns}
             dataSource={logs}
             loading={{

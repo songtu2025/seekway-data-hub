@@ -184,6 +184,9 @@ describe("同步任务定时计划页", () => {
     const user = userEvent.setup();
     renderSchedule();
     await screen.findByText(/已选择 0 个接口/);
+    expect(
+      screen.queryByText("确认计划所属账号，并查看任务执行服务是否可用。"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("当前结果 1 / 共 1 · 已选 0")).toBeInTheDocument();
     expectSelectText("批量运行方式", "每日");
     const expressionInput = screen.getByLabelText("批量每日执行时间");
