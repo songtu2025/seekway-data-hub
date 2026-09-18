@@ -159,9 +159,53 @@ def test_smtp_mail_subjects_use_product_name(monkeypatch: pytest.MonkeyPatch) ->
     sender.send_password_reset("user@example.com", "http://localhost/reset#synthetic")
 
     assert [message["Subject"] for message in client.messages] == [
-        f"{PRODUCT_NAME}邀请",
-        f"{PRODUCT_NAME}密码重置",
+        f"你已被邀请加入 {PRODUCT_NAME}",
+        f"重置 {PRODUCT_NAME}登录密码",
     ]
+
+
+def test_smtp_mail_includes_branded_html_and_plain_text_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeSmtpClient([])
+    monkeypatch.setattr(mail_service.smtplib, "SMTP", lambda *_args, **_kwargs: client)
+    settings = WebSettings(
+        _env_file=None,
+        mail_provider="smtp",
+        smtp_host="smtp.example.com",
+        smtp_from="no-reply@example.com",
+        smtp_use_tls=False,
+        invitation_ttl_hours=12,
+        password_reset_ttl_minutes=20,
+    )
+    sender = SmtpMailSender(settings)
+    invitation_url = 'https://sync.example.com/register#token=a&next="home"'
+    reset_url = "https://sync.example.com/reset#token=synthetic"
+
+    sender.send_invitation("user@example.com", "viewer", invitation_url)
+    sender.send_password_reset("user@example.com", reset_url)
+
+    invitation = client.messages[0]
+    invitation_plain = invitation.get_body(preferencelist=("plain",))
+    invitation_html = invitation.get_body(preferencelist=("html",))
+    assert invitation.get_content_type() == "multipart/alternative"
+    assert invitation_plain is not None
+    assert invitation_html is not None
+    assert "账号角色为「只读成员」" in invitation_plain.get_content()
+    assert "12 小时后失效" in invitation_plain.get_content()
+    assert invitation_url in invitation_plain.get_content()
+    assert "接受邀请" in invitation_html.get_content()
+    assert "#token=a&amp;next=&quot;home&quot;" in invitation_html.get_content()
+
+    password_reset = client.messages[1]
+    reset_plain = password_reset.get_body(preferencelist=("plain",))
+    reset_html = password_reset.get_body(preferencelist=("html",))
+    assert reset_plain is not None
+    assert reset_html is not None
+    assert "20 分钟后失效" in reset_plain.get_content()
+    assert "当前密码不会改变" in reset_plain.get_content()
+    assert "重置密码" in reset_html.get_content()
+    assert reset_url in reset_html.get_content()
 
 
 def test_smtp_without_tls_never_creates_or_uses_ssl_context(

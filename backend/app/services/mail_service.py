@@ -2,12 +2,129 @@ import smtplib
 import ssl
 from dataclasses import dataclass, field
 from email.message import EmailMessage
+from html import escape
 from typing import Protocol
 
 from backend.app.core.config import WebSettings
 from backend.app.core.product import PRODUCT_NAME
 
 SMTP_TIMEOUT_SECONDS = 30
+ROLE_LABELS = {
+    "admin": "管理员",
+    "operator": "操作员",
+    "viewer": "只读成员",
+}
+ACTION_EMAIL_HTML_TEMPLATE = """\
+<!doctype html>
+<html lang="zh-CN">
+  <body
+    style="margin:0;background:#f3f6f5;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;"
+  >
+    <table
+      role="presentation" width="100%" cellspacing="0" cellpadding="0"
+      style="background:#f3f6f5;padding:32px 12px;"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation" width="100%" cellspacing="0" cellpadding="0"
+            style="max-width:560px;background:#ffffff;border:1px solid #dce5e2;
+              border-radius:12px;overflow:hidden;"
+          >
+            <tr>
+              <td
+                style="border-top:4px solid #0b6b57;padding:24px 28px 12px;
+                  color:#0b6b57;font-size:14px;font-weight:700;letter-spacing:.02em;"
+              >
+                {product_name}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 28px 28px;">
+                <h1
+                  style="margin:0 0 18px;color:#172321;font-size:24px;line-height:1.35;"
+                >{heading}</h1>
+                {paragraphs}
+                <table
+                  role="presentation" cellspacing="0" cellpadding="0"
+                  style="margin:24px 0;"
+                >
+                  <tr>
+                    <td style="border-radius:8px;background:#0b6b57;">
+                      <a
+                        href="{action_url}"
+                        style="display:inline-block;padding:12px 22px;color:#ffffff;
+                          font-size:15px;font-weight:700;text-decoration:none;"
+                      >{action_label}</a>
+                    </td>
+                  </tr>
+                </table>
+                <p
+                  style="margin:0 0 8px;color:#62706d;font-size:13px;line-height:1.65;"
+                >若按钮无法打开，请复制以下链接到浏览器：</p>
+                <p
+                  style="margin:0 0 20px;color:#0b6b57;font-size:12px;
+                    line-height:1.6;word-break:break-all;"
+                >{action_url}</p>
+                <div style="background:#f3f7f6;border-radius:8px;padding:14px 16px;">
+                  <p
+                    style="margin:0 0 6px;color:#465552;font-size:13px;line-height:1.65;"
+                  >{expiry_text}</p>
+                  <p
+                    style="margin:0;color:#465552;font-size:13px;line-height:1.65;"
+                  >{security_note}</p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+"""
+
+
+def _set_action_email_content(
+    message: EmailMessage,
+    *,
+    heading: str,
+    paragraphs: tuple[str, ...],
+    action_label: str,
+    action_url: str,
+    expiry_text: str,
+    security_note: str,
+) -> None:
+    """生成带纯文本备用版本的品牌操作邮件。"""
+    plain_text = "\n\n".join(
+        (
+            *paragraphs,
+            f"{action_label}：\n{action_url}",
+            expiry_text,
+            security_note,
+            PRODUCT_NAME,
+        )
+    )
+    paragraph_html = "".join(
+        f'<p style="margin:0 0 12px;color:#33413f;font-size:15px;line-height:1.7;">'
+        f"{escape(paragraph)}</p>"
+        for paragraph in paragraphs
+    )
+    safe_url = escape(action_url, quote=True)
+    message.set_content(plain_text)
+    message.add_alternative(
+        ACTION_EMAIL_HTML_TEMPLATE.format(
+            product_name=escape(PRODUCT_NAME),
+            heading=escape(heading),
+            paragraphs=paragraph_html,
+            action_url=safe_url,
+            action_label=escape(action_label),
+            expiry_text=escape(expiry_text),
+            security_note=escape(security_note),
+        ),
+        subtype="html",
+    )
 
 
 class MailSender(Protocol):
@@ -28,21 +145,47 @@ class SmtpMailSender:
 
     def send_invitation(self, email: str, role: str, invitation_url: str) -> None:
         message = EmailMessage()
-        message["Subject"] = f"{PRODUCT_NAME}邀请"
+        message["Subject"] = f"你已被邀请加入 {PRODUCT_NAME}"
         message["From"] = self.settings.smtp_from
         message["To"] = email
-        message.set_content(
-            f"你已被邀请为 {role}。请使用以下一次性链接完成注册：\n{invitation_url}"
+        role_label = ROLE_LABELS.get(role, role)
+        _set_action_email_content(
+            message,
+            heading=f"加入 {PRODUCT_NAME}",
+            paragraphs=(
+                f"你收到了一份成员邀请，账号角色为「{role_label}」。",
+                "点击下方按钮设置姓名和登录密码，完成加入。",
+            ),
+            action_label="接受邀请",
+            action_url=invitation_url,
+            expiry_text=(
+                f"此邀请链接将在 {self.settings.invitation_ttl_hours} 小时后失效，且只能使用一次。"
+            ),
+            security_note="请勿转发邀请链接。如果你不认识这份邀请，可以忽略此邮件。",
         )
 
         self._send(message)
 
     def send_password_reset(self, email: str, reset_url: str) -> None:
         message = EmailMessage()
-        message["Subject"] = f"{PRODUCT_NAME}密码重置"
+        message["Subject"] = f"重置 {PRODUCT_NAME}登录密码"
         message["From"] = self.settings.smtp_from
         message["To"] = email
-        message.set_content(f"请使用以下一次性链接重置登录密码：\n{reset_url}")
+        _set_action_email_content(
+            message,
+            heading="重置登录密码",
+            paragraphs=(
+                "我们收到了此邮箱的密码重置请求。",
+                "点击下方按钮设置新的登录密码。",
+            ),
+            action_label="重置密码",
+            action_url=reset_url,
+            expiry_text=(
+                f"此链接将在 {self.settings.password_reset_ttl_minutes} 分钟后失效，"
+                "且只能使用一次。"
+            ),
+            security_note=("如果不是你发起的请求，忽略此邮件即可，当前密码不会改变。"),
+        )
 
         self._send(message)
 
