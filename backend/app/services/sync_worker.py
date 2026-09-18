@@ -818,6 +818,12 @@ class SyncWorker:
         progress["historyCompleteThrough"] = (
             execution.window_end.isoformat() if execution.window_end else None
         )
+        total_windows = int(progress.get("totalWindows") or 0)
+        if (
+            progress["completedWindows"] >= total_windows
+            and progress.get("_incrementalEnabled") is False
+        ):
+            progress["changeCatchup"] = "complete"
         return progress
 
     @staticmethod
@@ -831,7 +837,8 @@ class SyncWorker:
         completed = int(progress.get("completedWindows") or 0)
         total = int(progress.get("totalWindows") or 0)
         if completed >= total:
-            SyncWorker._enqueue_first_incremental_window(db, execution, progress)
+            if progress.get("_incrementalEnabled") is not False:
+                SyncWorker._enqueue_first_incremental_window(db, execution, progress)
             return
         frozen_end = _parse_date(progress.get("_frozenWindowEnd"))
         if frozen_end is None:

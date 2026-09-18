@@ -17,13 +17,14 @@ from backend.app.services.m3_common import json_object, utc_iso
 from backend.app.services.sync_job_planning import (
     BackfillState,
     IncrementalHistory,
-    backfill_state,
     backfill_window_plan,
+    current_backfill_state,
     incremental_target_end,
     incremental_window_plan,
     incremental_window_start,
     normalized_window_days,
     policy_local_date,
+    supports_incremental_window,
     validate_incremental_window,
 )
 from backend.app.services.sync_job_service import ACTIVE_JOB_STATUSES, latest_execution_ids
@@ -177,14 +178,30 @@ def _checkpoint_window_preview(
     history = checkpoints.get((policy.jijia_account_id, policy.api_code, HISTORY_BACKFILL), {})
     prediction_at = policy.next_run_at if status == "normal" and policy.next_run_at else current
     try:
-        state = backfill_state(
+        update_window = item.get("update_window") or {}
+        state = current_backfill_state(
             window_config,
             history,
+            update_window,
             normalized_window_days(window_config),
             lambda: policy_local_date(prediction_at, policy.timezone),
         )
         if state.start <= state.frozen_end:
             return _history_preview(policy, item, history, state, status, prediction_at)
+        if not supports_incremental_window(update_window):
+            return _preview_data(
+                phase="history_backfill",
+                basis_label=_history_basis(item),
+                start=state.start,
+                end=None,
+                complete_through=_checkpoint_date(history.get("window_end")),
+                lag_days=max(int(window_config.get("lag_days") or 0), 0),
+                max_window_days=state.window_days,
+                advances_on_success=True,
+                prediction_status=(
+                    "unavailable" if status in {"account_inactive", "api_disabled"} else "caught_up"
+                ),
+            )
     except (ApiError, KeyError, TypeError, ValueError):
         return _unavailable_preview("history_backfill", _history_basis(item))
     try:

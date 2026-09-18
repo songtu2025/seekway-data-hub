@@ -313,6 +313,41 @@ def test_worker_chains_two_continuous_windows_and_links_one_batch_each(
     ]
 
 
+def test_history_only_backfill_stops_after_final_window(
+    harness: AuthHarness,
+    monkeypatch,
+) -> None:
+    first_id = _queue_two_window_job(harness, monkeypatch)
+    with harness.session_factory() as db:
+        first = db.get(SyncJob, first_id)
+        first.progress_json = {
+            **first.progress_json,
+            "_incrementalEnabled": False,
+        }
+        db.commit()
+    worker = SyncWorker(
+        harness.session_factory,
+        BatchWritingExecutor(harness),
+        "worker-history-only",
+        heartbeat_interval_seconds=0.1,
+    )
+
+    assert worker.run_once() == first_id
+    with harness.session_factory() as db:
+        second = db.scalar(select(SyncJob).where(SyncJob.status == "queued"))
+        second_id = second.id
+
+    assert worker.run_once() == second_id
+    assert worker.run_once() is None
+
+    with harness.session_factory() as db:
+        jobs = db.scalars(select(SyncJob).order_by(SyncJob.id)).all()
+        assert len(jobs) == 2
+        assert all(job.job_type == "history_backfill" for job in jobs)
+        assert all(job.status == "success" for job in jobs)
+        assert jobs[-1].progress_json["changeCatchup"] == "complete"
+
+
 def test_worker_uses_published_config_for_chaining(
     harness: AuthHarness,
     monkeypatch,

@@ -1583,6 +1583,7 @@ apis:
     enabled: false
     method: POST
     path: /finance/asset/dateRangeReports/page
+    checkpoint_kind: history_backfill
     page:
       enabled: true
       page_no_field: page

@@ -12,6 +12,7 @@ class DateRangeReportsPageConfigTest(unittest.TestCase):
         self.assertFalse(api["enabled"])
         self.assertEqual(api["method"], "POST")
         self.assertEqual(api["path"], "/finance/asset/dateRangeReports/page")
+        self.assertEqual(api["checkpoint_kind"], "history_backfill")
         self.assertTrue(api["commit_per_page"])
         self.assertEqual(api["data_date_param"], "purchaseStartDate")
         self.assertEqual(api["primary_key"], {"field": "id", "required": False})

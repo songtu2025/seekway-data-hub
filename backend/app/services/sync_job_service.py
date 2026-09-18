@@ -46,15 +46,16 @@ from backend.app.services.sync_job_planning import (
     IncrementalHistory,
     ManualPreviewRequest,
     WindowPlan,
-    backfill_state,
     backfill_window_plan,
     checkpoint_preview,
+    current_backfill_state,
     incremental_target_end,
     incremental_window_plan,
     incremental_window_start,
     manual_range_preview,
     no_date_window_plan,
     normalized_window_days,
+    supports_incremental_window,
     validate_incremental_window,
 )
 from backend.app.services.sync_job_planning import policy_local_date as policy_local_date
@@ -456,7 +457,7 @@ def retry_job(
                 api,
             )
         except ApiError as error:
-            if error.code != "INCREMENTAL_CAUGHT_UP":
+            if error.code not in {"INCREMENTAL_CAUGHT_UP", "HISTORY_CAUGHT_UP"}:
                 raise
             original.resolution_code = SYNC_JOB_RESOLUTION_CAUGHT_UP
             original.resolved_at = utc_now()
@@ -1473,26 +1474,33 @@ def _job_window(
         )
     ).scalar_one_or_none()
     checkpoint_data = json_object(checkpoint)
-    state = backfill_state(
+    update_window = api.get("update_window") or {}
+
+    def local_today() -> date:
+        return datetime.now(ZoneInfo(policy.timezone)).date()
+
+    state = current_backfill_state(
         window_config,
         checkpoint_data,
+        update_window,
         window_days,
-        lambda: datetime.now(ZoneInfo(policy.timezone)).date(),
+        local_today,
     )
     if state.start > state.frozen_end:
-        return _incremental_job_window(
-            db,
-            account,
-            api,
-            IncrementalHistory(
-                checkpoint=checkpoint_data,
-                end=state.frozen_end,
-                window_count=state.total_windows,
-                policy_timezone=policy.timezone,
-            ),
-        )
+        if supports_incremental_window(update_window):
+            return _incremental_job_window(
+                db,
+                account,
+                api,
+                IncrementalHistory(
+                    checkpoint=checkpoint_data,
+                    end=state.frozen_end,
+                    window_count=state.total_windows,
+                    policy_timezone=policy.timezone,
+                ),
+            )
+        raise ApiError(409, "HISTORY_CAUGHT_UP", "历史数据已经追平")
     backfill_started_at = checkpoint_data.get("backfill_started_at") or utc_iso(utc_now())
-    update_window = api.get("update_window") or {}
     return backfill_window_plan(
         state,
         checkpoint_data,

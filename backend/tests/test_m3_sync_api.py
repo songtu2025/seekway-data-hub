@@ -40,13 +40,14 @@ def test_utc_iso_accepts_mysql_aggregate_datetime_string() -> None:
     assert utc_iso("2026-09-18 14:58:59") == "2026-09-18T14:58:59Z"
 
 
-def enable_return_policy(
+def enable_policy(
     client: TestClient,
     auth: dict,
     account_id: int,
+    api_code: str,
 ) -> None:
     response = client.put(
-        f"/api/v1/jijia-accounts/{account_id}/api-policies/sale_return_order_page",
+        f"/api/v1/jijia-accounts/{account_id}/api-policies/{api_code}",
         json={
             "enabled": True,
             "schedule_mode": "manual_only",
@@ -56,6 +57,57 @@ def enable_return_policy(
         headers={"X-CSRF-Token": auth["csrfToken"]},
     )
     assert response.status_code == 200
+
+
+def enable_return_policy(
+    client: TestClient,
+    auth: dict,
+    account_id: int,
+) -> None:
+    enable_policy(client, auth, account_id, "sale_return_order_page")
+
+
+def test_history_only_preview_resumes_after_stale_frozen_end(
+    harness: AuthHarness,
+    monkeypatch,
+) -> None:
+    client, auth, account = create_active_account(harness, monkeypatch)
+    enable_policy(client, auth, account["id"], "date_range_reports_page")
+    now = datetime(2026, 9, 18, 8, 0, 0)
+    with harness.session_factory() as db:
+        db.execute(
+            insert(sync_checkpoint_table).values(
+                jijia_account_id=account["id"],
+                api_code="date_range_reports_page",
+                checkpoint_kind="history_backfill",
+                checkpoint_value={
+                    "absolute_lower_bound": "2021-08-01",
+                    "window_start": "2021-08-01",
+                    "window_end": "2021-08-01",
+                    "next_window_start": "2021-08-02",
+                    "frozen_window_end": "2021-08-01",
+                },
+                checkpoint_time=now,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/sync-jobs/preview",
+        json={
+            "jijia_account_id": account["id"],
+            "api_code": "date_range_reports_page",
+        },
+    )
+
+    assert response.status_code == 200
+    preview = response.json()["data"]
+    assert preview["startDate"] == "2021-08-02"
+    assert preview["endDate"] > "2021-08-02"
+    assert preview["windowDays"] == 1
+    assert preview["windowCount"] > 1
 
 
 def test_scheduled_plan_view_exposes_blocker_latest_job_and_utc_time(

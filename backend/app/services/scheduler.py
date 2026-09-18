@@ -78,7 +78,7 @@ class SyncScheduler:
                 try:
                     outcome = create_scheduled_job(db, policy, scheduled_for, self.settings)
                 except ApiError as error:
-                    if error.code != "INCREMENTAL_CAUGHT_UP":
+                    if error.code not in {"INCREMENTAL_CAUGHT_UP", "HISTORY_CAUGHT_UP"}:
                         raise
                     # 已追平是本计划槽位的成功空操作，必须推进，避免 Worker 热循环。
                     policy.next_run_at = next_run_for_policy(policy, current)

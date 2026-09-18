@@ -167,6 +167,16 @@ def normalized_window_days(window_config: dict[str, Any]) -> int:
     return max(int(window_config.get("days") or 1), 1)
 
 
+def supports_incremental_window(update_window: dict[str, Any]) -> bool:
+    """判断接口是否具备已验证的修改时间增量契约。"""
+    return bool(
+        update_window.get("enabled")
+        and update_window.get("verified_doc_id")
+        and update_window.get("start_field")
+        and update_window.get("end_field")
+    )
+
+
 def backfill_state(
     window_config: dict[str, Any],
     checkpoint: dict[str, Any],
@@ -203,6 +213,22 @@ def backfill_state(
     )
 
 
+def current_backfill_state(
+    window_config: dict[str, Any],
+    checkpoint: dict[str, Any],
+    update_window: dict[str, Any],
+    window_days: int,
+    local_today: Callable[[], date],
+) -> BackfillState:
+    """历史型接口追平旧冻结范围后，为下一次运行刷新可用截止日。"""
+    state = backfill_state(window_config, checkpoint, window_days, local_today)
+    if state.start <= state.frozen_end or supports_incremental_window(update_window):
+        return state
+    refreshed_checkpoint = dict(checkpoint)
+    refreshed_checkpoint.pop("frozen_window_end", None)
+    return backfill_state(window_config, refreshed_checkpoint, window_days, local_today)
+
+
 def backfill_window_plan(
     state: BackfillState,
     history_checkpoint: dict[str, Any],
@@ -219,7 +245,7 @@ def backfill_window_plan(
         max((state.start - state.floor).days // state.window_days, 0),
         state.total_windows,
     )
-    incremental_lag_days = max(int(update_window.get("lag_days") or 0), 0)
+    incremental_enabled = supports_incremental_window(update_window)
     progress = _progress(
         ProgressSpec(
             completed_windows=completed_windows,
@@ -234,11 +260,17 @@ def backfill_window_plan(
         {
             "_frozenWindowEnd": state.frozen_end.isoformat(),
             "_backfillStartedAt": backfill_started_at,
-            "_incrementalWindowDays": normalized_window_days(update_window),
-            "_incrementalTimezone": policy_timezone,
-            "_incrementalLagDays": incremental_lag_days,
+            "_incrementalEnabled": incremental_enabled,
         }
     )
+    if incremental_enabled:
+        progress.update(
+            {
+                "_incrementalWindowDays": normalized_window_days(update_window),
+                "_incrementalTimezone": policy_timezone,
+                "_incrementalLagDays": max(int(update_window.get("lag_days") or 0), 0),
+            }
+        )
     return WindowPlan(
         job_type="history_backfill",
         start=state.start,
@@ -249,12 +281,7 @@ def backfill_window_plan(
 
 def validate_incremental_window(update_window: dict[str, Any]) -> None:
     """确认修改时间增量契约已经由官方文档验证。"""
-    if not (
-        update_window.get("enabled")
-        and update_window.get("verified_doc_id")
-        and update_window.get("start_field")
-        and update_window.get("end_field")
-    ):
+    if not supports_incremental_window(update_window):
         raise ApiError(409, "UPDATE_WINDOW_UNVERIFIED", "修改时间增量契约尚未确认")
 
 
