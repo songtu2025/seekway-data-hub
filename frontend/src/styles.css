@@ -202,7 +202,7 @@ a:focus-visible {
   padding: 24px clamp(20px, 2vw, 32px) 32px;
   background: transparent;
 }
-.account-security-page {
+.m3-page.account-security-page {
   max-width: 680px;
   margin: 0 auto;
   padding-top: clamp(40px, 7vh, 72px);
@@ -2498,11 +2498,15 @@ a:focus-visible {
 }
 .m3-page {
   width: 100%;
-  max-width: var(--layout-wide-max);
+  max-width: none;
   min-height: 100vh;
-  margin: 0 auto;
+  margin: 0;
   padding: 24px clamp(20px, 2vw, 32px) 32px;
   background: transparent;
+}
+.job-create-page {
+  max-width: var(--layout-workflow-max);
+  margin: 0 auto;
 }
 .m3-page > p:first-child {
   margin: 0 0 16px;
