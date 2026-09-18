@@ -7,6 +7,7 @@ import type { Invitation, User, UserRole, UserStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
+import { useUrlSearchInput } from "../hooks/useUrlSearchInput";
 import { ConfirmationModal, InviteMemberModal } from "./MemberActionModals";
 import { InvitationWorkspace, MemberToolbar, MemberWorkspace } from "./MemberDirectorySections";
 import {
@@ -41,7 +42,7 @@ export function MembersPage() {
   const inviteGenerationRef = useRef(0);
   const refreshRequestedRef = useRef(false);
   const view: MembersView = searchParams.get("view") === "invitations" ? "invitations" : "members";
-  const search = searchParams.get("q") ?? "";
+  const urlSearch = searchParams.get("q") ?? "";
   const selectedId = parseSelectedId(searchParams.get("member"));
   const selectedInvitationId = parseSelectedId(searchParams.get("invitation"));
 
@@ -56,6 +57,11 @@ export function MembersPage() {
     },
     [searchParams, setSearchParams],
   );
+  const {
+    inputProps: searchInputProps,
+    setValue: setSearch,
+    value: search,
+  } = useUrlSearchInput(urlSearch, (value) => updateUrl({ q: value || null }, true));
 
   const loadUsers = useCallback(async (showLoading = true): Promise<boolean> => {
     const generation = ++usersGenerationRef.current;
@@ -383,15 +389,15 @@ export function MembersPage() {
 
         <MemberToolbar
           actions={{
-            changeSearch: (value) => updateUrl({ q: value || null }),
             selectView: (nextView) => {
+              setSearch("");
               updateUrl({ q: null, view: nextView === "members" ? null : nextView });
             },
           }}
           state={{
             invitationCount: invitations.length,
             memberCount: members.length,
-            search,
+            searchInputProps,
             view,
           }}
         />

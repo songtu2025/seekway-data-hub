@@ -7,6 +7,7 @@ import type { JijiaAccount } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
+import { useUrlSearchInput } from "../hooks/useUrlSearchInput";
 import { formatAccountDate, getAccountReadiness } from "./accountReadiness";
 import { statusLabel } from "./m3Utils";
 
@@ -26,7 +27,17 @@ export function AccountsPage() {
       : requestedFilter === "ready" || requestedFilter === "active"
         ? "ready"
         : "all";
-  const search = searchParams.get("q") ?? "";
+  const urlSearch = searchParams.get("q") ?? "";
+  const {
+    inputProps: searchInputProps,
+    setValue: setSearch,
+    value: search,
+  } = useUrlSearchInput(urlSearch, (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set("q", value);
+    else next.delete("q");
+    setSearchParams(next, { replace: true, state: location.state });
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
@@ -102,20 +113,16 @@ export function AccountsPage() {
     ready: "可同步",
     inactive: "已停用",
   };
-  const listQuery = searchParams.toString();
+  const listParams = new URLSearchParams(searchParams);
+  if (search) listParams.set("q", search);
+  else listParams.delete("q");
+  const listQuery = listParams.toString();
   const listPath = listQuery ? `/accounts?${listQuery}` : "/accounts";
   const returnNavigation = {
     from: listPath,
     backLabel: "返回账号列表",
     returnState: location.state,
   };
-
-  function updateSearch(value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set("q", value);
-    else next.delete("q");
-    setSearchParams(next, { replace: true, state: location.state });
-  }
 
   function updateFilter(nextFilter: AccountFilter) {
     const next = new URLSearchParams(searchParams);
@@ -125,6 +132,7 @@ export function AccountsPage() {
   }
 
   function clearFilters() {
+    setSearch("");
     setSearchParams({}, { replace: true, state: location.state });
   }
 
@@ -152,10 +160,9 @@ export function AccountsPage() {
 
         <section className="account-toolbar account-toolbar--overview" aria-label="账号筛选">
           <Input.Search
+            {...searchInputProps}
             aria-label="搜索账号"
             placeholder="搜索账号名称或 appId 尾号"
-            value={search}
-            onChange={(event) => updateSearch(event.target.value)}
           />
           {(Object.keys(filterLabels) as AccountFilter[]).map((item) => (
             <Button

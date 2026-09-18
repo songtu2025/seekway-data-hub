@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, api } from "../api/client";
@@ -94,6 +94,28 @@ describe("成员与权限页", () => {
 
     expect((await screen.findAllByText("operator@example.com")).length).toBeGreaterThan(0);
     expect(screen.getByRole("alert")).toHaveTextContent("邀请列表暂不可用");
+  });
+
+  it("快速输入成员搜索词时保持准确内容并同步查询参数", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/members"]}>
+        <MembersPage />
+        <MembersLocationProbe />
+      </MemoryRouter>,
+    );
+    await screen.findAllByText("admin@example.com");
+
+    const searchInput = screen.getByRole("searchbox", { name: "搜索成员" });
+    await user.type(searchInput, "zz");
+
+    expect(searchInput).toHaveValue("zz");
+    await waitFor(() =>
+      expect(
+        new URLSearchParams(screen.getByTestId("members-location").textContent ?? "").get("q"),
+      ).toBe("zz"),
+    );
+    expect(searchInput).toHaveValue("zz");
   });
 
   it("手动刷新保留搜索、当前成员和旧列表，并阻止重复请求与写操作", async () => {
@@ -778,6 +800,11 @@ describe("成员与权限页", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });
+
+function MembersLocationProbe() {
+  const location = useLocation();
+  return <output data-testid="members-location">{location.search}</output>;
+}
 
 describe("邀请派生状态", () => {
   const now = Date.parse("2026-09-03T08:00:00Z");

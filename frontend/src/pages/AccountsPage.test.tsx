@@ -1,6 +1,6 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useNavigate } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "../api/client";
@@ -58,9 +58,11 @@ function deferred<T>() {
 }
 
 function AccountsNavigationHarness() {
+  const location = useLocation();
   const navigate = useNavigate();
   return (
     <>
+      <output aria-label="当前账号查询参数">{location.search}</output>
       <button type="button" onClick={() => navigate("/accounts?filter=attention")}>
         显示需处理 URL
       </button>
@@ -165,6 +167,11 @@ describe("接入管理账号列表", () => {
     await screen.findByText("待修复账号");
     await user.type(screen.getByRole("searchbox", { name: "搜索账号" }), "北美");
     expect(screen.queryByText("待修复账号")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("当前账号查询参数")).toHaveTextContent(
+        `?q=${encodeURIComponent("北美")}`,
+      ),
+    );
     await user.click(screen.getByRole("button", { name: "显示需处理 URL" }));
 
     expect(screen.getByRole("button", { name: "需处理 1" })).toHaveAttribute(
@@ -179,6 +186,51 @@ describe("接入管理账号列表", () => {
     expect(screen.getByText("北美业务账号")).toBeInTheDocument();
     expect(screen.queryByText("待修复账号")).not.toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "搜索账号" })).toHaveValue("北美");
+  });
+
+  it("快速输入时保持准确内容，并在停顿后同步查询参数", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/accounts"]}>
+        <AccountsNavigationHarness />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("北美业务账号");
+    const searchInput = screen.getByRole("searchbox", { name: "搜索账号" });
+    await user.type(searchInput, "zz");
+
+    expect(searchInput).toHaveValue("zz");
+    expect(screen.getByLabelText("当前账号查询参数")).toBeEmptyDOMElement();
+    await waitFor(() =>
+      expect(screen.getByLabelText("当前账号查询参数")).toHaveTextContent("?q=zz"),
+    );
+    expect(searchInput).toHaveValue("zz");
+  });
+
+  it("输入法组合期间不写入 URL，结束后只同步最终内容", async () => {
+    render(
+      <MemoryRouter initialEntries={["/accounts"]}>
+        <AccountsNavigationHarness />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("北美业务账号");
+    const searchInput = screen.getByRole("searchbox", { name: "搜索账号" });
+    fireEvent.compositionStart(searchInput);
+    fireEvent.change(searchInput, { target: { value: "zz" } });
+
+    expect(searchInput).toHaveValue("zz");
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    });
+    expect(screen.getByLabelText("当前账号查询参数")).toBeEmptyDOMElement();
+
+    fireEvent.compositionEnd(searchInput, { data: "zz" });
+    await waitFor(() =>
+      expect(screen.getByLabelText("当前账号查询参数")).toHaveTextContent("?q=zz"),
+    );
+    expect(searchInput).toHaveValue("zz");
   });
 
   it("加载失败只展示错误并可原位重试", async () => {

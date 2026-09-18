@@ -1,4 +1,5 @@
 import { Button, Empty, Input, Select, Spin, Tag } from "antd";
+import type { InputProps } from "antd";
 import { Link } from "react-router-dom";
 
 import type { Invitation, User, UserRole } from "../api/types";
@@ -18,12 +19,14 @@ import {
 type MemberToolbarState = {
   invitationCount: number;
   memberCount: number;
-  search: string;
+  searchInputProps: Pick<
+    InputProps,
+    "onChange" | "onCompositionEnd" | "onCompositionStart" | "value"
+  >;
   view: MembersView;
 };
 
 type MemberToolbarActions = {
-  changeSearch: (value: string) => void;
   selectView: (view: MembersView) => void;
 };
 
@@ -57,11 +60,10 @@ export function MemberToolbar({
         </Button>
       </div>
       <Input
+        {...state.searchInputProps}
         aria-label={state.view === "members" ? "搜索成员" : "搜索邀请"}
         placeholder={state.view === "members" ? "搜索姓名或邮箱" : "搜索受邀邮箱"}
         type="search"
-        value={state.search}
-        onChange={(event) => actions.changeSearch(event.target.value)}
       />
     </section>
   );

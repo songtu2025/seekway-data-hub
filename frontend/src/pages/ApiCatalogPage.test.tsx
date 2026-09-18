@@ -206,6 +206,19 @@ describe("接口中心", () => {
     expect(screen.getByRole("link", { name: "查看原始数据" })).toBeInTheDocument();
   });
 
+  it("快速输入搜索词时保持准确内容并同步查询参数", async () => {
+    const user = userEvent.setup();
+    renderCatalog("/api-catalog");
+    await screen.findByRole("button", { name: connected.name });
+
+    const searchInput = screen.getByRole("searchbox", { name: "搜索接口" });
+    await user.type(searchInput, "zz");
+
+    expect(searchInput).toHaveValue("zz");
+    await waitFor(() => expect(readQuery().get("q")).toBe("zz"));
+    expect(searchInput).toHaveValue("zz");
+  });
+
   it("搜索路径与业务域、平台状态组合筛选，重置后恢复结果", async () => {
     const user = userEvent.setup();
     vi.mocked(api.getApiCatalog).mockResolvedValue([
@@ -558,8 +571,8 @@ describe("接口中心", () => {
     });
     expect(readQuery().has("api")).toBe(false);
     await user.type(screen.getByRole("searchbox", { name: "搜索接口" }), "_0");
-    expect(readQuery().get("page") ?? "1").toBe("1");
     expect(screen.getByRole("button", { name: "店铺接口 0" })).toBeInTheDocument();
+    await waitFor(() => expect(readQuery().get("page") ?? "1").toBe("1"));
   });
 
   it("官方目录不自动展开，doc深链可恢复待接入说明且无虚假接入按钮", async () => {

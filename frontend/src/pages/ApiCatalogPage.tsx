@@ -8,6 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
 import { responsiveTableCell } from "../components/responsiveTable";
+import { useUrlSearchInput } from "../hooks/useUrlSearchInput";
 import { businessDomainKey, businessDomainLabel } from "../businessDomains";
 import { buildPolicyUpdate } from "../policyUtils";
 import { ConnectedCatalogDetail, OfficialCatalogDetail } from "./ApiCatalogDetails";
@@ -53,7 +54,10 @@ export function ApiCatalogPage() {
   const [query, setQuery] = useSearchParams();
   const view = query.get("view") === "official" ? "official" : "connected";
   const accountId = query.get("account") ?? "";
-  const search = query.get("q") ?? "";
+  const urlSearch = query.get("q") ?? "";
+  const { inputProps: searchInputProps, value: search } = useUrlSearchInput(urlSearch, (value) =>
+    updateQuery({ q: value }, true, true),
+  );
   const domain = query.get("domain") ?? "";
   const platform = query.get("platform") ?? "";
   const status = query.get("status") ?? "";
@@ -653,11 +657,10 @@ export function ApiCatalogPage() {
               <label className="catalog-search">
                 <span>搜索接口</span>
                 <Input.Search
+                  {...searchInputProps}
                   aria-label="搜索接口"
                   placeholder="搜索名称、编码或路径"
-                  value={search}
                   allowClear
-                  onChange={(event) => updateQuery({ q: event.target.value }, true, true)}
                 />
               </label>
               <label>
