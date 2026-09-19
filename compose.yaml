@@ -8,7 +8,7 @@ x-app-service: &app-service
   env_file:
     - ${SEEKWAY_ENV_FILE:-/etc/seekway-data-hub.env}
   init: true
-  restart: on-failure
+  restart: unless-stopped
   read_only: true
   tmpfs:
     - /tmp:size=67108864,mode=1777
