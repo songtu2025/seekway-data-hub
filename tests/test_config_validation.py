@@ -159,6 +159,8 @@ class ConfigValidationTest(unittest.TestCase):
             migration_db_name="migration_db",
             migration_db_user="migration_user",
             migration_db_password="migration_password",
+            db_tls_mode="verify_identity",
+            db_tls_ca_path="/run/db-certs/polardb-ca.pem",
         )
 
         database_url = settings.database_url
@@ -178,6 +180,8 @@ class ConfigValidationTest(unittest.TestCase):
             db_name="runtime_db",
             db_user="runtime_user",
             db_password="runtime_password",
+            db_tls_mode="verify_identity",
+            db_tls_ca_path="/run/db-certs/polardb-ca.pem",
         )
         migration_values = """\
 MIGRATION_DB_HOST=migration-db.example.invalid
@@ -214,6 +218,39 @@ MIGRATION_DB_PASSWORD=migration_password
 
         self.assertEqual(settings.database_url.host, "migration-db.example.invalid")
         self.assertEqual(settings.database_url.port, 3308)
+        self.assertEqual(settings.db_tls_mode, "verify_identity")
+        self.assertEqual(
+            settings.db_tls_ca_path,
+            Path("/run/db-certs/polardb-ca.pem"),
+        )
+
+    def test_production_runtime_requires_verified_database_tls(self):
+        with self.assertRaises(ValueError):
+            AppSettings(_env_file=None, app_env="production")
+
+        with self.assertRaises(ValueError):
+            AppSettings(
+                _env_file=None,
+                app_env="production",
+                db_tls_mode="verify_identity",
+            )
+
+        with self.assertRaises(ValueError):
+            AppSettings(
+                _env_file=None,
+                app_env="production",
+                db_tls_mode="verify_identity",
+                db_tls_ca_path="",
+            )
+
+        settings = AppSettings(
+            _env_file=None,
+            app_env="production",
+            db_tls_mode="verify_identity",
+            db_tls_ca_path="/run/db-certs/polardb-ca.pem",
+        )
+
+        self.assertEqual(settings.db_tls_mode, "verify_identity")
 
     def test_local_migration_loader_uses_runtime_database_fallback(self):
         runtime_settings = AppSettings(

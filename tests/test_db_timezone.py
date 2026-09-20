@@ -1,3 +1,4 @@
+import ssl
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -85,3 +86,27 @@ def test_migration_engine_does_not_inherit_runtime_pool_settings() -> None:
         "pool_pre_ping": True,
         "pool_recycle": 3600,
     }
+
+
+def test_mysql_engine_uses_verified_tls_context() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        db_tls_mode="verify_identity",
+        db_tls_ca_path="/run/db-certs/polardb-ca.pem",
+    )
+    engine = _engine("mysql")
+    tls_context = Mock(spec=ssl.SSLContext)
+
+    with (
+        patch("app.db.ssl.create_default_context", return_value=tls_context) as context_factory,
+        patch("app.db.create_engine", return_value=engine) as engine_factory,
+        patch("app.db.event.listen"),
+    ):
+        assert create_db_engine(settings) is engine
+
+    context_factory.assert_called_once_with(
+        ssl.Purpose.SERVER_AUTH,
+        cafile=str(settings.db_tls_ca_path),
+    )
+    assert tls_context.minimum_version == ssl.TLSVersion.TLSv1_2
+    assert engine_factory.call_args.kwargs["connect_args"] == {"ssl": tls_context}

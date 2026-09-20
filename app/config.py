@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import Field, model_validator
@@ -16,6 +16,7 @@ MAX_WORKER_PROCESSES = 8
 MAX_DB_POOL_SIZE = 50
 MAX_DB_MAX_OVERFLOW = 50
 MAX_DB_POOL_TIMEOUT_SECONDS = 300.0
+DatabaseTlsMode = Literal["disabled", "verify_identity"]
 
 
 def runtime_database_capacity_valid(settings: Any) -> bool:
@@ -74,6 +75,8 @@ class AppSettings(BaseSettings):
     db_name: str = "jijia_sync"
     db_user: str = "your_db_user"
     db_password: str = "your_db_password"
+    db_tls_mode: DatabaseTlsMode = "disabled"
+    db_tls_ca_path: Path | None = None
     db_pool_size: int = Field(default=5, ge=1, le=MAX_DB_POOL_SIZE)
     db_max_overflow: int = Field(default=5, ge=0, le=MAX_DB_MAX_OVERFLOW)
     db_pool_timeout_seconds: float = Field(
@@ -96,6 +99,7 @@ class AppSettings(BaseSettings):
         """拒绝超过当前数据库连接预算的运行时进程配置。"""
         if not runtime_database_capacity_valid(self):
             raise ValueError("Runtime database connection capacity exceeds budget")
+        validate_database_tls(self.app_env, self.db_tls_mode, self.db_tls_ca_path)
         return self
 
     @property
@@ -125,6 +129,8 @@ class MigrationDatabaseSettings(BaseSettings):
     fallback_db_name: str = "jijia_sync"
     fallback_db_user: str = "your_db_user"
     fallback_db_password: str = "your_db_password"
+    db_tls_mode: DatabaseTlsMode = "disabled"
+    db_tls_ca_path: Path | None = None
 
     migration_db_host: str | None = None
     migration_db_port: int | None = None
@@ -141,6 +147,7 @@ class MigrationDatabaseSettings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_migration_database(self) -> "MigrationDatabaseSettings":
         """生产迁移必须显式提供完整的 MIGRATION_DB_* 配置。"""
+        validate_database_tls(self.app_env, self.db_tls_mode, self.db_tls_ca_path)
         if self.app_env.lower() not in {"prod", "production"}:
             return self
         values = {
@@ -198,7 +205,21 @@ def load_migration_settings() -> MigrationDatabaseSettings:
         fallback_db_name=runtime_settings.db_name,
         fallback_db_user=runtime_settings.db_user,
         fallback_db_password=runtime_settings.db_password,
+        db_tls_mode=runtime_settings.db_tls_mode,
+        db_tls_ca_path=runtime_settings.db_tls_ca_path,
     )
+
+
+def validate_database_tls(
+    app_env: str,
+    tls_mode: DatabaseTlsMode,
+    ca_path: Path | None,
+) -> None:
+    """生产数据库必须校验 CA 与服务端身份，禁止明文或降级连接。"""
+    if tls_mode == "verify_identity" and (ca_path is None or str(ca_path).strip() in {"", "."}):
+        raise ValueError("DB_TLS_CA_PATH is required when DB_TLS_MODE=verify_identity")
+    if app_env.lower() in {"prod", "production"} and tls_mode != "verify_identity":
+        raise ValueError("Production requires DB_TLS_MODE=verify_identity")
 
 
 def load_api_configs(path: str | Path) -> list[dict[str, Any]]:

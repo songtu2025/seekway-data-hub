@@ -208,10 +208,13 @@ def _production_settings_valid(
         app_settings.db_name,
         app_settings.db_user,
         app_settings.db_password,
+        app_settings.db_tls_ca_path,
     )
     if not all(_configured(value) for value in runtime_values):
         return False
     if not runtime_database_capacity_valid(app_settings):
+        return False
+    if app_settings.db_tls_mode != "verify_identity":
         return False
     if not str(web_settings.public_web_url).lower().startswith("https://"):
         return False

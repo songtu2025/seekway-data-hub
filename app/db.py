@@ -1,3 +1,4 @@
+import ssl
 from typing import Any
 
 from sqlalchemy import create_engine, event, text
@@ -49,6 +50,13 @@ def create_db_engine(settings: AppSettings | MigrationDatabaseSettings) -> Engin
             max_overflow=settings.db_max_overflow,
             pool_timeout=settings.db_pool_timeout_seconds,
         )
+    if settings.db_tls_mode == "verify_identity":
+        tls_context = ssl.create_default_context(
+            ssl.Purpose.SERVER_AUTH,
+            cafile=str(settings.db_tls_ca_path),
+        )
+        tls_context.minimum_version = ssl.TLSVersion.TLSv1_2
+        engine_options["connect_args"] = {"ssl": tls_context}
     engine = create_engine(settings.database_url, **engine_options)
     return configure_engine_session_timezone(engine)
 

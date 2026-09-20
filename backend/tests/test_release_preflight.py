@@ -38,6 +38,8 @@ def _settings(tmp_path: Path):
         db_name="runtime_db",
         db_user="runtime_user",
         db_password="runtime_password",
+        db_tls_mode="verify_identity",
+        db_tls_ca_path="/run/db-certs/polardb-ca.pem",
         db_pool_size=3,
         db_max_overflow=2,
         db_pool_timeout_seconds=30,
@@ -146,6 +148,35 @@ def test_release_preflight_blocks_nonproduction_configuration(tmp_path, capsys) 
         app_settings_loader=lambda: app_settings,
         web_settings_loader=lambda: web_settings,
         engine_factory=lambda _settings: pytest.fail("配置不合格时不能创建引擎"),
+    )
+
+    assert exit_code == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "RELEASE_CONFIG_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("db_tls_mode", "disabled"),
+        ("db_tls_ca_path", None),
+    ],
+)
+def test_release_preflight_requires_verified_database_tls(
+    tmp_path,
+    capsys,
+    field_name,
+    value,
+) -> None:
+    _build_frontend(tmp_path)
+    app_settings, web_settings = _settings(tmp_path)
+    setattr(app_settings, field_name, value)
+
+    exit_code = release_preflight.main(
+        ["--confirm-read-only-database"],
+        project_root=tmp_path,
+        app_settings_loader=lambda: app_settings,
+        web_settings_loader=lambda: web_settings,
+        engine_factory=lambda _settings: pytest.fail("TLS 配置不合格时不能创建引擎"),
     )
 
     assert exit_code == 2

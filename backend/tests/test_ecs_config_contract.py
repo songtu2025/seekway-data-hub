@@ -78,6 +78,7 @@ def test_compose_services_use_scoped_preflight_and_safe_runtime_contract() -> No
         assert service["restart"] == "on-failure"
         assert service["cap_drop"] == ["ALL"]
         assert service["security_opt"] == ["no-new-privileges:true"]
+        assert "${SEEKWAY_DB_CERT_DIR:-./config/ecs}:/run/db-certs:ro" in service["volumes"]
 
     assert services["api"]["ports"] == ["127.0.0.1:${SEEKWAY_API_PORT:-8000}:8000"]
     assert services["frontend"]["ports"] == ["127.0.0.1:${SEEKWAY_FRONTEND_PORT:-8080}:8080"]
