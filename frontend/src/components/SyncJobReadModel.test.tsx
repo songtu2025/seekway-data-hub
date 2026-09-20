@@ -19,23 +19,38 @@ function lifecycleEvents(count = 11): NonNullable<SyncJob["lifecycleEvents"]> {
 }
 
 describe("任务生命周期", () => {
-  it("默认展示最新事件，并在轮询新增事件时保留正在浏览的历史页", async () => {
+  it("展示服务端分页事件并请求目标页", async () => {
     const user = userEvent.setup();
-    const { rerender } = render(<SyncJobLifecycle events={lifecycleEvents()} />);
+    const events = lifecycleEvents().reverse();
+    const onPageChange = vi.fn();
+    const { rerender } = render(
+      <SyncJobLifecycle
+        currentPage={1}
+        events={events.slice(0, 5)}
+        pageSize={5}
+        total={events.length}
+        onPageChange={onPageChange}
+      />,
+    );
 
     expect(screen.getByText("共 11 条事件")).toBeInTheDocument();
     expect(screen.getByText(/执行 #11 · 操作人：操作人 11/)).toBeInTheDocument();
     expect(screen.queryByText("操作人：操作人 1")).not.toBeInTheDocument();
 
     await user.click(screen.getByTitle("2"));
+    expect(onPageChange).toHaveBeenCalledWith(2, 5);
 
+    rerender(
+      <SyncJobLifecycle
+        currentPage={2}
+        events={events.slice(5, 10)}
+        pageSize={5}
+        total={events.length}
+        onPageChange={onPageChange}
+      />,
+    );
     expect(screen.getByText(/执行 #6 · 操作人：操作人 6/)).toBeInTheDocument();
     expect(screen.queryByText(/执行 #11/)).not.toBeInTheDocument();
-
-    rerender(<SyncJobLifecycle events={lifecycleEvents(12)} />);
-
-    expect(screen.getByText(/执行 #7 · 操作人：操作人 7/)).toBeInTheDocument();
-    expect(screen.queryByText(/执行 #12/)).not.toBeInTheDocument();
   });
 });
 

@@ -912,32 +912,57 @@ def task_context(db: Session, job: SyncJob) -> tuple[SyncJob, datetime, datetime
     return current, timestamps[0], timestamps[1]
 
 
-def task_executions(db: Session, job: SyncJob) -> list[dict[str, object]]:
-    """按逻辑任务返回不可变执行窗口和批次证据。"""
-    statement = select(SyncJob, _sync_run_id_column())
+def _task_execution_condition(job: SyncJob) -> Any:
+    """返回逻辑任务执行记录的统一筛选条件。"""
     if job.task_no:
-        statement = statement.where(SyncJob.task_no == job.task_no)
-    else:
-        statement = statement.where(SyncJob.id == job.id)
-    rows = db.execute(statement.order_by(SyncJob.id)).all()
-    return [
-        {
-            "id": row[0].id,
-            "jobNo": row[0].job_no,
-            "triggerType": row[0].trigger_type,
-            "windowIndex": row[0].window_index,
-            "windowStart": row[0].window_start.isoformat() if row[0].window_start else None,
-            "windowEnd": row[0].window_end.isoformat() if row[0].window_end else None,
-            "status": row[0].status,
-            "syncBatchNo": row[0].sync_batch_no,
-            "syncRunId": row.sync_run_id,
-            "createdAt": utc_iso(row[0].created_at),
-            "startedAt": utc_iso(row[0].started_at),
-            "pausedAt": utc_iso(row[0].paused_at),
-            "finishedAt": utc_iso(row[0].finished_at),
-        }
-        for row in rows
-    ]
+        return SyncJob.task_no == job.task_no
+    return SyncJob.id == job.id
+
+
+def _execution_data(row: Any) -> dict[str, object]:
+    """序列化一条任务执行记录。"""
+    execution = row[0]
+    return {
+        "id": execution.id,
+        "jobNo": execution.job_no,
+        "triggerType": execution.trigger_type,
+        "windowIndex": execution.window_index,
+        "windowStart": execution.window_start.isoformat() if execution.window_start else None,
+        "windowEnd": execution.window_end.isoformat() if execution.window_end else None,
+        "status": execution.status,
+        "syncBatchNo": execution.sync_batch_no,
+        "syncRunId": row.sync_run_id,
+        "createdAt": utc_iso(execution.created_at),
+        "startedAt": utc_iso(execution.started_at),
+        "pausedAt": utc_iso(execution.paused_at),
+        "finishedAt": utc_iso(execution.finished_at),
+    }
+
+
+def task_execution_count(db: Session, job: SyncJob) -> int:
+    """返回逻辑任务的执行次数。"""
+    return int(db.scalar(select(func.count(SyncJob.id)).where(_task_execution_condition(job))) or 0)
+
+
+def task_execution_page(
+    db: Session,
+    job: SyncJob,
+    page: int,
+    limit: int,
+) -> dict[str, object]:
+    """按最新优先分页返回逻辑任务执行记录。"""
+    size = page_size(limit)
+    condition = _task_execution_condition(job)
+    statement = select(SyncJob, _sync_run_id_column())
+    rows = db.execute(
+        statement.where(condition).order_by(SyncJob.id.desc()).offset((page - 1) * size).limit(size)
+    ).all()
+    return {
+        "items": [_execution_data(row) for row in rows],
+        "total": int(db.scalar(select(func.count(SyncJob.id)).where(condition)) or 0),
+        "page": page,
+        "pageSize": size,
+    }
 
 
 def list_jobs(

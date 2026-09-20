@@ -24,6 +24,10 @@ vi.mock("../api/client", async (importOriginal) => {
       ...original.api,
       getSyncJob: vi.fn(),
       getSyncTask: vi.fn(),
+      getSyncJobExecutions: vi.fn(),
+      getSyncTaskExecutions: vi.fn(),
+      getSyncJobEvents: vi.fn(),
+      getSyncTaskEvents: vi.fn(),
       stopSyncJob: vi.fn(),
       stopSyncTask: vi.fn(),
       retrySyncJob: vi.fn(),
@@ -84,6 +88,30 @@ describe("同步任务详情", () => {
     });
     vi.mocked(api.listSyncRunLogs).mockResolvedValue({ items: [] });
     vi.mocked(api.listFailedRequests).mockResolvedValue({ items: [] });
+    vi.mocked(api.getSyncJobExecutions).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+    });
+    vi.mocked(api.getSyncTaskExecutions).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+    });
+    vi.mocked(api.getSyncJobEvents).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 5,
+    });
+    vi.mocked(api.getSyncTaskEvents).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 5,
+    });
   });
 
   afterEach(() => {
@@ -171,9 +199,12 @@ describe("同步任务详情", () => {
     expect(within(heading!).getByText("账号：Spring-Test")).toBeInTheDocument();
     expect(within(heading!).getByText("API：sale_return_order_page")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "执行记录（0）", selected: true })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "任务事件（0）" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "任务事件" })).toBeInTheDocument();
     expect(await screen.findByLabelText("任务执行服务状态")).toHaveClass("worker-status--compact");
-    expect(api.getSyncTask).toHaveBeenCalledWith("task_c536f155447639e7b025e985");
+    expect(api.getSyncTask).toHaveBeenCalledWith(
+      "task_c536f155447639e7b025e985",
+      expect.any(AbortSignal),
+    );
     expect(api.getSyncJob).not.toHaveBeenCalled();
   });
 
@@ -243,9 +274,9 @@ describe("同步任务详情", () => {
     expect(await screen.findByText("2021-02-01 至 2021-02-28")).toBeInTheDocument();
     expect(screen.queryByText("2021-01-01 至 2021-01-31")).not.toBeInTheDocument();
     expect(api.getSyncJob).toHaveBeenCalledTimes(1);
-    expect(api.getSyncJob).toHaveBeenCalledWith("7");
+    expect(api.getSyncJob).toHaveBeenCalledWith("7", expect.any(AbortSignal));
     expect(api.getSyncTask).toHaveBeenCalledTimes(1);
-    expect(api.getSyncTask).toHaveBeenCalledWith("TASK-HISTORY-1");
+    expect(api.getSyncTask).toHaveBeenCalledWith("TASK-HISTORY-1", expect.any(AbortSignal));
   });
 
   it("执行记录每页十条并优先显示当前执行", async () => {
@@ -277,6 +308,12 @@ describe("同步任务详情", () => {
       syncRunId: 11,
       executions,
     });
+    vi.mocked(api.getSyncJobExecutions).mockImplementation(async (_jobId, page = 1) => ({
+      items: page === 1 ? [...executions].reverse().slice(0, 10) : [executions[0]],
+      total: executions.length,
+      page,
+      pageSize: 10,
+    }));
     const user = userEvent.setup();
 
     render(
@@ -375,6 +412,21 @@ describe("同步任务详情", () => {
         },
       ],
     });
+    vi.mocked(api.getSyncJobEvents).mockResolvedValue({
+      items: [
+        {
+          id: "audit-1",
+          eventType: "created",
+          occurredAt: "2026-08-27T08:00:00Z",
+          actorName: "管理员",
+          executionId: 8,
+          status: null,
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 5,
+    });
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/jobs/8"]}>
@@ -384,7 +436,7 @@ describe("同步任务详情", () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole("tab", { name: "任务事件（1）" }));
+    await user.click(await screen.findByRole("tab", { name: "任务事件" }));
     expect(await screen.findByRole("heading", { name: "任务生命周期" })).toBeInTheDocument();
     expect(screen.getByText("任务已创建")).toBeInTheDocument();
     expect(screen.getByText(/执行 #8 · 操作人：管理员/)).toBeInTheDocument();
@@ -501,7 +553,7 @@ describe("同步任务详情", () => {
     expect(screen.getByText("等待首个分页结果")).toBeInTheDocument();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(5000);
     });
     expect(screen.getByText("12 / 416")).toBeInTheDocument();
   });
@@ -530,6 +582,7 @@ describe("同步任务详情", () => {
 
     fireEvent.click(screen.getByRole("link", { name: "切换到任务 8" }));
     await waitFor(() => expect(api.getSyncJob).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(api.getSyncJob).mock.calls[0][1]?.aborted).toBe(true);
     expect(screen.queryByText("任务号：JOB-007")).not.toBeInTheDocument();
     expect(screen.getByText("正在加载任务详情…")).toBeInTheDocument();
 
@@ -587,7 +640,7 @@ describe("同步任务详情", () => {
     expect(screen.getByText("任务号：JOB-008")).toBeInTheDocument();
   });
 
-  it("慢轮询完成后再等待三秒，期间不发起重叠请求", async () => {
+  it("慢轮询完成后再等待五秒，期间不发起重叠请求", async () => {
     vi.useFakeTimers();
     const slowPoll = deferred<SyncJob>();
     vi.mocked(api.getSyncJob)
@@ -619,7 +672,7 @@ describe("同步任务详情", () => {
     expect(screen.getByText("2 / 10")).toBeInTheDocument();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(2999);
+      await vi.advanceTimersByTimeAsync(4999);
     });
     expect(api.getSyncJob).toHaveBeenCalledTimes(2);
 
@@ -659,7 +712,7 @@ describe("同步任务详情", () => {
     expect(screen.getByText("任务号：JOB-007")).toBeInTheDocument();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(5000);
     });
     expect(api.getSyncJob).toHaveBeenCalledTimes(2);
 
@@ -759,7 +812,7 @@ describe("同步任务详情", () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole("tab", { name: "任务事件（0）" }));
+    await user.click(await screen.findByRole("tab", { name: "任务事件" }));
     expect(screen.getByRole("tab", { name: "任务事件（0）", selected: true })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "批次诊断" })).not.toBeInTheDocument();
 
@@ -807,6 +860,37 @@ describe("同步任务详情", () => {
           finishedAt: null,
         },
       ],
+    });
+    vi.mocked(api.getSyncTaskExecutions).mockResolvedValue({
+      items: [
+        {
+          id: 18,
+          jobNo: "JOB-018",
+          windowIndex: 2,
+          windowStart: "2021-02-01",
+          windowEnd: "2021-02-28",
+          status: "paused",
+          syncBatchNo: "BATCH-18",
+          syncRunId: 18,
+          startedAt: "2026-08-26T02:00:00Z",
+          finishedAt: null,
+        },
+        {
+          id: 17,
+          jobNo: "JOB-017",
+          windowIndex: 1,
+          windowStart: "2021-01-01",
+          windowEnd: "2021-01-31",
+          status: "success",
+          syncBatchNo: "BATCH-17",
+          syncRunId: 17,
+          startedAt: "2026-08-26T01:00:00Z",
+          finishedAt: "2026-08-26T01:10:00Z",
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 10,
     });
     vi.mocked(api.listSyncRunLogs).mockImplementation(async (runId) => ({
       items: [
@@ -869,6 +953,25 @@ describe("同步任务详情", () => {
           message: "日志仍可查看",
         },
       ],
+    });
+    vi.mocked(api.getSyncJobExecutions).mockResolvedValue({
+      items: [
+        {
+          id: 17,
+          jobNo: "JOB-017",
+          windowIndex: 1,
+          windowStart: "2021-01-01",
+          windowEnd: "2021-01-31",
+          status: "success",
+          syncBatchNo: "BATCH-17",
+          syncRunId: 17,
+          startedAt: "2026-08-26T01:00:00Z",
+          finishedAt: "2026-08-26T01:10:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 10,
     });
     vi.mocked(api.listFailedRequests)
       .mockRejectedValueOnce(new ApiError("失败请求暂时不可用", 503, "SERVICE_UNAVAILABLE"))
@@ -977,6 +1080,25 @@ describe("同步任务详情", () => {
           finishedAt: "2026-08-26T01:10:00Z",
         },
       ],
+    });
+    vi.mocked(api.getSyncJobExecutions).mockResolvedValue({
+      items: [
+        {
+          id: 17,
+          jobNo: "JOB-017",
+          windowIndex: 1,
+          windowStart: "2021-01-01",
+          windowEnd: "2021-01-31",
+          status: "success",
+          syncBatchNo: "BATCH-17",
+          syncRunId: 17,
+          startedAt: "2026-08-26T01:00:00Z",
+          finishedAt: "2026-08-26T01:10:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 10,
     });
 
     render(
@@ -1122,7 +1244,7 @@ describe("同步任务详情", () => {
 
     await user.click(await screen.findByRole("button", { name: "取消任务" }));
 
-    expect(api.getSyncTask).toHaveBeenNthCalledWith(1, "TASK-HISTORY-1");
+    expect(api.getSyncTask).toHaveBeenNthCalledWith(1, "TASK-HISTORY-1", expect.any(AbortSignal));
     expect(api.cancelSyncTask).toHaveBeenCalledWith("TASK-HISTORY-1", "csrf-token");
     expect(await screen.findByText("已终止")).toBeInTheDocument();
     expect(api.getSyncJob).not.toHaveBeenCalled();
@@ -1194,7 +1316,7 @@ describe("同步任务详情", () => {
     });
     expect(screen.getByRole("button", { name: "取消任务" })).toBeInTheDocument();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(5000);
     });
     expect(api.getSyncJob).toHaveBeenCalledTimes(2);
 
@@ -1344,6 +1466,21 @@ describe("同步任务详情", () => {
       taskNo,
       taskStatus: "caught_up",
     });
+    vi.mocked(api.getSyncTaskEvents).mockResolvedValue({
+      items: [
+        {
+          id: "audit-1",
+          eventType: "resolved",
+          occurredAt: "2026-09-17T16:26:45Z",
+          actorName: "spring",
+          executionId: 8,
+          status: "failed",
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 5,
+    });
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={[`/jobs/tasks/${taskNo}`]}>
@@ -1367,8 +1504,8 @@ describe("同步任务详情", () => {
     expect(screen.queryByRole("button", { name: "重试任务" })).not.toBeInTheDocument();
     expect(screen.getByTestId("current-path")).toHaveTextContent(`/jobs/tasks/${taskNo}`);
 
-    await user.click(screen.getByRole("tab", { name: "任务事件（1）" }));
-    expect(screen.getByText("数据范围已由后续同步覆盖")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "任务事件" }));
+    expect(await screen.findByText("数据范围已由后续同步覆盖")).toBeInTheDocument();
   });
 
   it("忽略失败提醒后保留证据并可恢复关注", async () => {

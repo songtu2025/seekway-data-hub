@@ -18,6 +18,7 @@ import type {
   JobCancelledResponse,
   OfficialApiCatalogItem,
   PasswordPolicy,
+  PageResponse,
   ParsedDataItem,
   ParsedDataListQuery,
   ParsedDataListResponse,
@@ -33,6 +34,8 @@ import type {
   SaleReturnOrderListResponse,
   ScheduledPlan,
   SyncJob,
+  SyncJobExecution,
+  SyncJobLifecycleEvent,
   SyncJobListQuery,
   SyncJobListResponse,
   SyncJobMarketOption,
@@ -95,7 +98,7 @@ export class ApiError extends Error {
 
 function request<T>(path: string, options: RequestInit = {}, csrfToken?: string): Promise<T> {
   const method = (options.method ?? "GET").toUpperCase();
-  if (method !== "GET") {
+  if (method !== "GET" || options.signal) {
     return sendRequest<T>(path, options, csrfToken);
   }
 
@@ -375,9 +378,33 @@ export const api = {
       }),
     ).then((value) => (Array.isArray(value) ? { items: value } : value)),
   listScheduledPlans: () => request<ScheduledPlan[]>("/api/v1/sync-jobs/scheduled-plans"),
-  getSyncJob: (jobId: number | string) =>
-    request<SyncJob>(`/api/v1/sync-jobs/${encodeURIComponent(String(jobId))}`),
-  getSyncTask: (taskNo: string) => request<SyncJob>(syncTaskPath(taskNo)),
+  getSyncJob: (jobId: number | string, signal?: AbortSignal) =>
+    request<SyncJob>(`/api/v1/sync-jobs/${encodeURIComponent(String(jobId))}`, { signal }),
+  getSyncTask: (taskNo: string, signal?: AbortSignal) =>
+    request<SyncJob>(syncTaskPath(taskNo), { signal }),
+  getSyncJobExecutions: (jobId: number | string, page = 1, limit = 10, signal?: AbortSignal) =>
+    request<PageResponse<SyncJobExecution>>(
+      listPath(`/api/v1/sync-jobs/${encodeURIComponent(String(jobId))}/executions`, {
+        page,
+        limit,
+      }),
+      { signal },
+    ),
+  getSyncTaskExecutions: (taskNo: string, page = 1, limit = 10, signal?: AbortSignal) =>
+    request<PageResponse<SyncJobExecution>>(
+      listPath(`${syncTaskPath(taskNo)}/executions`, { page, limit }),
+      { signal },
+    ),
+  getSyncJobEvents: (jobId: number | string, page = 1, limit = 5, signal?: AbortSignal) =>
+    request<PageResponse<SyncJobLifecycleEvent>>(
+      listPath(`/api/v1/sync-jobs/${encodeURIComponent(String(jobId))}/events`, { page, limit }),
+      { signal },
+    ),
+  getSyncTaskEvents: (taskNo: string, page = 1, limit = 5, signal?: AbortSignal) =>
+    request<PageResponse<SyncJobLifecycleEvent>>(
+      listPath(`${syncTaskPath(taskNo)}/events`, { page, limit }),
+      { signal },
+    ),
   getWorkerRuntime: () => request<WorkerRuntime>("/api/v1/runtime/worker"),
   retrySyncJob: (jobId: number | string, csrfToken: string) =>
     request<JobAcceptedResponse>(

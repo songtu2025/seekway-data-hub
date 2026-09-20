@@ -193,6 +193,51 @@ export interface HistoryProgress {
   changeCatchup: ChangeCatchupStatus;
 }
 
+export interface SyncJobExecution {
+  id: number | string;
+  jobNo: string;
+  triggerType?: "manual" | "retry" | "schedule";
+  windowIndex: number;
+  windowStart: string | null;
+  windowEnd: string | null;
+  status: SyncJobStatus;
+  syncBatchNo: string | null;
+  syncRunId: number | string | null;
+  createdAt?: string;
+  startedAt: string | null;
+  pausedAt?: string | null;
+  finishedAt: string | null;
+}
+
+export interface SyncJobLifecycleEvent {
+  id: string;
+  eventType:
+    | "created"
+    | "retried"
+    | "resumed"
+    | "started"
+    | "pause_requested"
+    | "pause_withdrawn"
+    | "paused"
+    | "stop_requested"
+    | "cancelled"
+    | "resolved"
+    | "dismissed"
+    | "attention_restored"
+    | "finished";
+  occurredAt: string;
+  actorName: string | null;
+  executionId: number | string;
+  status: SyncJobStatus | null;
+}
+
+export interface PageResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface SyncJob {
   id: number | string;
   jobNo?: string;
@@ -207,6 +252,7 @@ export interface SyncJob {
   taskStatus?: SyncTaskStatus;
   executionStatus?: SyncJobStatus;
   currentExecutionId?: number | string;
+  executionCount?: number;
   taskCreatedAt?: string;
   lastUpdatedAt?: string;
   completedWindows?: number;
@@ -260,42 +306,8 @@ export interface SyncJob {
     queuedAhead: number;
     eligibleAt: string;
   } | null;
-  executions?: Array<{
-    id: number | string;
-    jobNo: string;
-    triggerType?: "manual" | "retry" | "schedule";
-    windowIndex: number;
-    windowStart: string | null;
-    windowEnd: string | null;
-    status: SyncJobStatus;
-    syncBatchNo: string | null;
-    syncRunId: number | string | null;
-    createdAt?: string;
-    startedAt: string | null;
-    pausedAt?: string | null;
-    finishedAt: string | null;
-  }>;
-  lifecycleEvents?: Array<{
-    id: string;
-    eventType:
-      | "created"
-      | "retried"
-      | "resumed"
-      | "started"
-      | "pause_requested"
-      | "pause_withdrawn"
-      | "paused"
-      | "stop_requested"
-      | "cancelled"
-      | "resolved"
-      | "dismissed"
-      | "attention_restored"
-      | "finished";
-    occurredAt: string;
-    actorName: string | null;
-    executionId: number | string;
-    status: SyncJobStatus | null;
-  }>;
+  executions?: SyncJobExecution[];
+  lifecycleEvents?: SyncJobLifecycleEvent[];
 }
 
 export interface WorkerRuntime {

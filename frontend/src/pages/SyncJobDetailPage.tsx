@@ -4,7 +4,12 @@ import type { TableColumnsType } from "antd";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { api } from "../api/client";
-import type { JobAcceptedResponse, SyncJob } from "../api/types";
+import type {
+  JobAcceptedResponse,
+  SyncJob,
+  SyncJobExecution,
+  SyncJobLifecycleEvent,
+} from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
@@ -30,6 +35,9 @@ import {
   taskStatusLabel,
 } from "./syncJobStatus";
 import { hasSyncJobAction, type SyncJobControlAction } from "./syncJobDetailModel";
+
+const EXECUTION_PAGE_SIZE = 10;
+const EVENT_PAGE_SIZE = 5;
 
 function acceptedJobDetailPath(jobId: number | string, taskNo?: string | null): string {
   return taskNo
@@ -61,11 +69,27 @@ export function SyncJobDetailPage() {
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<number | string | null>(requestedRunId);
   const [activeHistoryTab, setActiveHistoryTab] = useState<"executions" | "events">("executions");
+  const [executions, setExecutions] = useState<SyncJobExecution[]>([]);
+  const [executionPage, setExecutionPage] = useState(1);
+  const [executionTotal, setExecutionTotal] = useState(0);
+  const [executionLoading, setExecutionLoading] = useState(false);
+  const [executionError, setExecutionError] = useState("");
+  const [lifecycleEvents, setLifecycleEvents] = useState<SyncJobLifecycleEvent[]>([]);
+  const [eventPage, setEventPage] = useState(1);
+  const [eventTotal, setEventTotal] = useState(0);
+  const [eventLoading, setEventLoading] = useState(false);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
+  const [eventError, setEventError] = useState("");
   const [diagnosticsNavigationRequest, setDiagnosticsNavigationRequest] = useState(0);
   const routeGenerationRef = useRef(0);
   const requestSequenceRef = useRef(0);
   const requestInFlightSequenceRef = useRef<number | null>(null);
   const cancelInFlightRef = useRef(false);
+  const routeAbortControllerRef = useRef<AbortController | null>(null);
+  const executionRequestRef = useRef(0);
+  const eventRequestRef = useRef(0);
+  const executionInitializedRef = useRef(false);
+  const executionTotalRef = useRef(0);
   const routeIdentifier = routeTaskNo ?? id;
   const currentJob =
     job && (routeTaskNo ? job.taskNo === routeTaskNo : String(job.id) === id) ? job : null;
@@ -96,10 +120,13 @@ export function SyncJobDetailPage() {
       generation: number,
       requestSequence: number,
       source: "initial" | "manual" | "auto" = "auto",
+      signal?: AbortSignal,
     ): Promise<SyncJob | null> => {
       requestInFlightSequenceRef.current = requestSequence;
       try {
-        const nextJob = byTaskNo ? await api.getSyncTask(targetId) : await api.getSyncJob(targetId);
+        const nextJob = byTaskNo
+          ? await api.getSyncTask(targetId, signal)
+          : await api.getSyncJob(targetId, signal);
         if (
           routeGenerationRef.current !== generation ||
           requestSequenceRef.current !== requestSequence
@@ -113,6 +140,7 @@ export function SyncJobDetailPage() {
         if (source === "auto") setRefreshNotice("");
         return nextJob;
       } catch (caught) {
+        if (isAbortError(caught)) return null;
         if (
           routeGenerationRef.current !== generation ||
           requestSequenceRef.current !== requestSequence
@@ -141,10 +169,103 @@ export function SyncJobDetailPage() {
     [],
   );
 
+  const loadExecutions = useCallback(
+    async (
+      targetId: string,
+      byTaskNo: boolean,
+      page: number,
+      generation: number,
+      signal?: AbortSignal,
+    ) => {
+      const requestSequence = ++executionRequestRef.current;
+      setExecutionLoading(true);
+      try {
+        const result = byTaskNo
+          ? await api.getSyncTaskExecutions(targetId, page, EXECUTION_PAGE_SIZE, signal)
+          : await api.getSyncJobExecutions(targetId, page, EXECUTION_PAGE_SIZE, signal);
+        if (
+          routeGenerationRef.current !== generation ||
+          executionRequestRef.current !== requestSequence
+        )
+          return;
+        setExecutions(result.items);
+        setExecutionPage(result.page);
+        setExecutionTotal(result.total);
+        executionTotalRef.current = result.total;
+        executionInitializedRef.current = true;
+        setExecutionError("");
+      } catch (caught) {
+        if (
+          isAbortError(caught) ||
+          routeGenerationRef.current !== generation ||
+          executionRequestRef.current !== requestSequence
+        )
+          return;
+        setExecutionError(getApiErrorMessage(caught, "执行记录加载失败，请稍后重试"));
+      } finally {
+        if (
+          routeGenerationRef.current === generation &&
+          executionRequestRef.current === requestSequence
+        ) {
+          setExecutionLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const loadEvents = useCallback(
+    async (
+      targetId: string,
+      byTaskNo: boolean,
+      page: number,
+      generation: number,
+      signal?: AbortSignal,
+    ) => {
+      const requestSequence = ++eventRequestRef.current;
+      setEventLoading(true);
+      try {
+        const result = byTaskNo
+          ? await api.getSyncTaskEvents(targetId, page, EVENT_PAGE_SIZE, signal)
+          : await api.getSyncJobEvents(targetId, page, EVENT_PAGE_SIZE, signal);
+        if (
+          routeGenerationRef.current !== generation ||
+          eventRequestRef.current !== requestSequence
+        )
+          return;
+        setLifecycleEvents(result.items);
+        setEventPage(result.page);
+        setEventTotal(result.total);
+        setEventsLoaded(true);
+        setEventError("");
+      } catch (caught) {
+        if (
+          isAbortError(caught) ||
+          routeGenerationRef.current !== generation ||
+          eventRequestRef.current !== requestSequence
+        )
+          return;
+        setEventsLoaded(true);
+        setEventError(getApiErrorMessage(caught, "任务事件加载失败，请稍后重试"));
+      } finally {
+        if (
+          routeGenerationRef.current === generation &&
+          eventRequestRef.current === requestSequence
+        ) {
+          setEventLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!routeIdentifier) return undefined;
     const generation = ++routeGenerationRef.current;
     const requestSequence = ++requestSequenceRef.current;
+    const abortController = new AbortController();
+    routeAbortControllerRef.current?.abort();
+    routeAbortControllerRef.current = abortController;
     setJob(null);
     jobRef.current = null;
     setLoading(true);
@@ -158,15 +279,41 @@ export function SyncJobDetailPage() {
     setStopConfirmOpen(false);
     setSelectedRunId(null);
     setActiveHistoryTab("executions");
+    setExecutions([]);
+    setExecutionPage(1);
+    setExecutionTotal(0);
+    executionTotalRef.current = 0;
+    executionInitializedRef.current = false;
+    setExecutionError("");
+    setLifecycleEvents([]);
+    setEventPage(1);
+    setEventTotal(0);
+    setEventsLoaded(false);
+    setEventError("");
     setDiagnosticsNavigationRequest(0);
     cancelInFlightRef.current = false;
-    void loadJob(routeIdentifier, Boolean(routeTaskNo), generation, requestSequence, "initial");
+    void loadJob(
+      routeIdentifier,
+      Boolean(routeTaskNo),
+      generation,
+      requestSequence,
+      "initial",
+      abortController.signal,
+    );
+    void loadExecutions(
+      routeIdentifier,
+      Boolean(routeTaskNo),
+      1,
+      generation,
+      abortController.signal,
+    );
     return () => {
+      abortController.abort();
       if (routeGenerationRef.current === generation) {
         routeGenerationRef.current += 1;
       }
     };
-  }, [loadJob, routeIdentifier, routeTaskNo]);
+  }, [loadExecutions, loadJob, routeIdentifier, routeTaskNo]);
 
   useEffect(() => {
     if (routeTaskNo || !currentJob?.taskNo) return;
@@ -185,9 +332,32 @@ export function SyncJobDetailPage() {
     document.getElementById("job-diagnostics")?.scrollIntoView?.({ block: "start" });
   }, [activeHistoryTab, diagnosticsNavigationRequest]);
 
+  useEffect(() => {
+    if (
+      !routeIdentifier ||
+      !executionInitializedRef.current ||
+      currentJob?.executionCount == null ||
+      currentJob.executionCount === executionTotalRef.current
+    )
+      return;
+    void loadExecutions(
+      currentJob.taskNo ?? routeIdentifier,
+      Boolean(currentJob.taskNo ?? routeTaskNo),
+      1,
+      routeGenerationRef.current,
+      routeAbortControllerRef.current?.signal,
+    );
+  }, [
+    currentJob?.executionCount,
+    currentJob?.taskNo,
+    loadExecutions,
+    routeIdentifier,
+    routeTaskNo,
+  ]);
+
   useVisiblePolling({
     enabled: Boolean(routeIdentifier && currentJobIsActive && !cancelling),
-    intervalMs: 3000,
+    intervalMs: 5000,
     onPoll: async () => {
       if (!routeIdentifier || requestInFlightSequenceRef.current !== null) return;
       const generation = routeGenerationRef.current;
@@ -198,6 +368,8 @@ export function SyncJobDetailPage() {
         Boolean(jobRef.current?.taskNo ?? routeTaskNo),
         generation,
         requestSequence,
+        "auto",
+        routeAbortControllerRef.current?.signal,
       );
     },
   });
@@ -210,7 +382,51 @@ export function SyncJobDetailPage() {
     setRefreshing(true);
     setRefreshNotice("");
     setError("");
-    void loadJob(routeIdentifier, Boolean(routeTaskNo), generation, requestSequence, "manual");
+    void loadJob(
+      routeIdentifier,
+      Boolean(routeTaskNo),
+      generation,
+      requestSequence,
+      "manual",
+      routeAbortControllerRef.current?.signal,
+    );
+    void loadExecutions(
+      currentJob?.taskNo ?? routeIdentifier,
+      Boolean(currentJob?.taskNo ?? routeTaskNo),
+      executionPage,
+      generation,
+      routeAbortControllerRef.current?.signal,
+    );
+  }
+
+  function loadExecutionPage(page: number) {
+    if (!routeIdentifier || executionLoading) return;
+    void loadExecutions(
+      currentJob?.taskNo ?? routeIdentifier,
+      Boolean(currentJob?.taskNo ?? routeTaskNo),
+      page,
+      routeGenerationRef.current,
+      routeAbortControllerRef.current?.signal,
+    );
+  }
+
+  function loadEventPage(page: number) {
+    if (!routeIdentifier || eventLoading) return;
+    void loadEvents(
+      currentJob?.taskNo ?? routeIdentifier,
+      Boolean(currentJob?.taskNo ?? routeTaskNo),
+      page,
+      routeGenerationRef.current,
+      routeAbortControllerRef.current?.signal,
+    );
+  }
+
+  function changeHistoryTab(key: string) {
+    const nextTab = key as "executions" | "events";
+    setActiveHistoryTab(nextTab);
+    if (nextTab === "events" && !eventsLoaded && !eventLoading) {
+      loadEventPage(1);
+    }
   }
 
   async function showAcceptedExecution(
@@ -230,12 +446,21 @@ export function SyncJobDetailPage() {
         Boolean(acceptedTaskNo),
         generation,
         requestSequence,
+        "auto",
+        routeAbortControllerRef.current?.signal,
       );
       return;
     }
     if (acceptedTaskNo && acceptedTaskNo === routeTaskNo) {
       const requestSequence = ++requestSequenceRef.current;
-      await loadJob(acceptedTaskNo, true, generation, requestSequence);
+      await loadJob(
+        acceptedTaskNo,
+        true,
+        generation,
+        requestSequence,
+        "auto",
+        routeAbortControllerRef.current?.signal,
+      );
       return;
     }
     navigate(acceptedJobDetailPath(accepted.jobId, acceptedTaskNo), {
@@ -286,7 +511,14 @@ export function SyncJobDetailPage() {
       else await api.cancelSyncJob(targetId, csrfToken);
       if (routeGenerationRef.current !== generation) return;
       const refreshSequence = ++requestSequenceRef.current;
-      await loadJob(targetId, Boolean(currentJob.taskNo), generation, refreshSequence);
+      await loadJob(
+        targetId,
+        Boolean(currentJob.taskNo),
+        generation,
+        refreshSequence,
+        "auto",
+        routeAbortControllerRef.current?.signal,
+      );
     } catch (caught) {
       if (routeGenerationRef.current !== generation) return;
       setError(getApiErrorMessage(caught, "取消失败，请稍后重试"));
@@ -327,7 +559,14 @@ export function SyncJobDetailPage() {
       }
       if (routeGenerationRef.current !== generation) return;
       const requestSequence = ++requestSequenceRef.current;
-      await loadJob(targetId, Boolean(currentJob.taskNo), generation, requestSequence);
+      await loadJob(
+        targetId,
+        Boolean(currentJob.taskNo),
+        generation,
+        requestSequence,
+        "auto",
+        routeAbortControllerRef.current?.signal,
+      );
       if (routeGenerationRef.current !== generation) return;
       setDismissConfirmOpen(false);
       setActionNotice(action === "dismiss" ? "已忽略此失败提醒" : "已恢复关注此失败任务");
@@ -379,6 +618,8 @@ export function SyncJobDetailPage() {
         Boolean(currentJob.taskNo),
         generation,
         sequence,
+        "auto",
+        routeAbortControllerRef.current?.signal,
       );
       if (action === "stop" && routeGenerationRef.current === generation) {
         setStopConfirmOpen(false);
@@ -398,20 +639,17 @@ export function SyncJobDetailPage() {
     currentJob?.status === "success" &&
     progress != null &&
     progress.completedWindows < progress.totalWindows;
-  const executions = currentJob?.executions ?? [];
-  const lifecycleEvents = currentJob?.lifecycleEvents ?? [];
+  const displayedExecutionTotal = currentJob?.executionCount ?? executionTotal;
   const orderedExecutions = useMemo(
     () =>
-      [...(currentJob?.executions ?? [])].sort((left, right) => {
-        const leftIsCurrent =
-          currentJob?.syncRunId != null && String(left.syncRunId) === String(currentJob.syncRunId);
-        const rightIsCurrent =
-          currentJob?.syncRunId != null && String(right.syncRunId) === String(currentJob.syncRunId);
-        if (leftIsCurrent !== rightIsCurrent) return leftIsCurrent ? -1 : 1;
-        const timeDifference = executionTimestamp(right) - executionTimestamp(left);
-        return timeDifference || String(right.id).localeCompare(String(left.id));
-      }),
-    [currentJob?.executions, currentJob?.syncRunId],
+      executions.map((execution) =>
+        currentJob?.currentExecutionId != null &&
+        String(execution.id) === String(currentJob.currentExecutionId) &&
+        currentJob.executionStatus
+          ? { ...execution, status: currentJob.executionStatus }
+          : execution,
+      ),
+    [currentJob?.currentExecutionId, currentJob?.executionStatus, executions],
   );
   const latestExecutionRunId = orderedExecutions.find(
     (execution) => execution.syncRunId != null,
@@ -448,13 +686,7 @@ export function SyncJobDetailPage() {
           ...(diagnosticWindowEnd ? { windowEnd: diagnosticWindowEnd } : {}),
         }).toString()}`
       : null;
-  const selectedExecutionIndex = orderedExecutions.findIndex(
-    (execution) =>
-      diagnosticRunId != null && String(execution.syncRunId) === String(diagnosticRunId),
-  );
-  const defaultExecutionPage =
-    selectedExecutionIndex >= 0 ? Math.floor(selectedExecutionIndex / 10) + 1 : 1;
-  const executionColumns: TableColumnsType<NonNullable<SyncJob["executions"]>[number]> = [
+  const executionColumns: TableColumnsType<SyncJobExecution> = [
     { title: "窗口", dataIndex: "windowIndex", key: "windowIndex" },
     {
       title: "数据范围",
@@ -605,7 +837,7 @@ export function SyncJobDetailPage() {
               </section>
             ) : null}
             <SyncJobProgressSection
-              executionCount={executions.length}
+              executionCount={displayedExecutionTotal}
               job={currentJob}
               runDetailState={{ from: currentPath, backLabel: "返回任务详情" }}
             />
@@ -613,26 +845,39 @@ export function SyncJobDetailPage() {
             <section className="m3-card job-history-card" aria-label="任务执行与事件">
               <Tabs
                 activeKey={activeHistoryTab}
-                onChange={(key) => setActiveHistoryTab(key as "executions" | "events")}
+                onChange={changeHistoryTab}
                 items={[
                   {
                     key: "executions",
-                    label: `执行记录（${executions.length}）`,
+                    label: `执行记录（${displayedExecutionTotal}）`,
                     children: (
                       <div className="job-history-panel">
-                        {executions.length > 0 ? (
+                        {executionError ? (
+                          <Alert
+                            action={
+                              <Button onClick={() => loadExecutionPage(executionPage)}>重试</Button>
+                            }
+                            showIcon
+                            title={executionError}
+                            type="warning"
+                          />
+                        ) : null}
+                        {orderedExecutions.length > 0 ? (
                           <div className="responsive-table-wrap responsive-table-wrap--cards">
                             <Table
                               key={`${currentJob.id}-${requestedRunId ?? "latest"}`}
                               className="responsive-table responsive-table--cards executions-table"
                               columns={executionColumns}
                               dataSource={orderedExecutions}
+                              loading={executionLoading}
                               pagination={{
-                                defaultCurrent: defaultExecutionPage,
+                                current: executionPage,
                                 hideOnSinglePage: true,
-                                pageSize: 10,
+                                pageSize: EXECUTION_PAGE_SIZE,
                                 showSizeChanger: false,
                                 showTotal: (total) => `共 ${total} 次执行`,
+                                total: executionTotal,
+                                onChange: loadExecutionPage,
                               }}
                               rowClassName={(execution) =>
                                 diagnosticRunId != null &&
@@ -644,6 +889,8 @@ export function SyncJobDetailPage() {
                               scroll={{ x: 960 }}
                             />
                           </div>
+                        ) : executionLoading ? (
+                          <Spin description="正在加载执行记录…" />
                         ) : (
                           <Empty description="尚无执行记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                         )}
@@ -673,13 +920,27 @@ export function SyncJobDetailPage() {
                   },
                   {
                     key: "events",
-                    label: `任务事件（${lifecycleEvents.length}）`,
-                    children:
-                      lifecycleEvents.length > 0 ? (
-                        <SyncJobLifecycle key={String(currentJob.id)} events={lifecycleEvents} />
-                      ) : (
-                        <Empty description="尚无任务事件" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                      ),
+                    label: eventsLoaded ? `任务事件（${eventTotal}）` : "任务事件",
+                    children: eventError ? (
+                      <Alert
+                        action={<Button onClick={() => loadEventPage(eventPage)}>重试</Button>}
+                        showIcon
+                        title={eventError}
+                        type="warning"
+                      />
+                    ) : eventLoading ? (
+                      <Spin description="正在加载任务事件…" />
+                    ) : lifecycleEvents.length > 0 ? (
+                      <SyncJobLifecycle
+                        currentPage={eventPage}
+                        events={lifecycleEvents}
+                        pageSize={EVENT_PAGE_SIZE}
+                        total={eventTotal}
+                        onPageChange={loadEventPage}
+                      />
+                    ) : (
+                      <Empty description="尚无任务事件" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    ),
                   },
                 ]}
               />
@@ -728,8 +989,6 @@ export function SyncJobDetailPage() {
   );
 }
 
-function executionTimestamp(execution: NonNullable<SyncJob["executions"]>[number]): number {
-  const value = execution.startedAt ?? execution.createdAt ?? "";
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? 0 : timestamp;
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }

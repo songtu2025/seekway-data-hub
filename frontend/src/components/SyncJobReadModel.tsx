@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
 import { Pagination, Progress } from "antd";
 
-import type { SyncJob } from "../api/types";
+import type { SyncJob, SyncJobLifecycleEvent } from "../api/types";
 import { formatDate, statusLabel } from "../pages/m3Utils";
 import { taskWindowProgress } from "../pages/syncJobStatus";
 
@@ -25,35 +24,27 @@ export function SyncJobProgressSummary({ job }: { job: SyncJob }) {
   );
 }
 
-export function SyncJobLifecycle({ events }: { events: NonNullable<SyncJob["lifecycleEvents"]> }) {
-  const pageSize = 5;
-  const orderedEvents = useMemo(
-    () =>
-      [...events].sort(
-        (left, right) =>
-          Date.parse(right.occurredAt) - Date.parse(left.occurredAt) ||
-          String(right.id).localeCompare(String(left.id)),
-      ),
-    [events],
-  );
-  const lastPage = Math.max(Math.ceil(orderedEvents.length / pageSize), 1);
-  const [currentPage, setCurrentPage] = useState(1);
-
-  useEffect(() => {
-    setCurrentPage((page) => Math.min(page, lastPage));
-  }, [lastPage]);
-
-  const pageStart = (currentPage - 1) * pageSize;
-  const visibleEvents = orderedEvents.slice(pageStart, pageStart + pageSize);
-
+export function SyncJobLifecycle({
+  events,
+  currentPage,
+  pageSize,
+  total,
+  onPageChange,
+}: {
+  events: SyncJobLifecycleEvent[];
+  currentPage: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
   return (
     <section className="job-lifecycle" aria-labelledby="job-lifecycle-title">
       <div className="job-lifecycle-heading">
         <h2 id="job-lifecycle-title">任务生命周期</h2>
-        <span>共 {orderedEvents.length} 条事件</span>
+        <span>共 {total} 条事件</span>
       </div>
       <ol>
-        {visibleEvents.map((event) => (
+        {events.map((event) => (
           <li key={event.id}>
             <strong>{lifecycleEventLabel(event.eventType, event.status)}</strong>
             <span>{formatDate(event.occurredAt)}</span>
@@ -64,7 +55,7 @@ export function SyncJobLifecycle({ events }: { events: NonNullable<SyncJob["life
           </li>
         ))}
       </ol>
-      {orderedEvents.length > pageSize ? (
+      {total > pageSize ? (
         <nav aria-label="任务生命周期分页">
           <Pagination
             className="job-lifecycle-pagination"
@@ -72,8 +63,8 @@ export function SyncJobLifecycle({ events }: { events: NonNullable<SyncJob["life
             pageSize={pageSize}
             showSizeChanger={false}
             size="small"
-            total={orderedEvents.length}
-            onChange={setCurrentPage}
+            total={total}
+            onChange={onPageChange}
           />
         </nav>
       ) : null}
@@ -82,7 +73,7 @@ export function SyncJobLifecycle({ events }: { events: NonNullable<SyncJob["life
 }
 
 function lifecycleEventLabel(
-  eventType: NonNullable<SyncJob["lifecycleEvents"]>[number]["eventType"],
+  eventType: SyncJobLifecycleEvent["eventType"],
   status: SyncJob["status"] | null,
 ): string {
   const labels = {

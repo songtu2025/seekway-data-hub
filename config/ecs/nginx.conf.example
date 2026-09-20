@@ -33,6 +33,13 @@ server {
     server_tokens off;
     limit_req_status 429;
 
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_vary on;
+    gzip_types application/json application/javascript text/css text/plain image/svg+xml;
+
     add_header Cache-Control $frontend_cache_control always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     # Ant Design 运行时样式和浮层定位需要内联 CSS；脚本仍只允许同源加载。

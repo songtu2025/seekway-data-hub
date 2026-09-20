@@ -972,7 +972,12 @@ def test_job_enqueue_is_non_blocking_and_viewer_is_read_only(
     assert detail.json()["data"]["apiName"] == "查询退货订单列表"
     assert detail.json()["data"]["queuedAt"].endswith("Z")
     assert detail.json()["data"]["progressSummary"]["requestCount"] is None
-    assert detail.json()["data"]["lifecycleEvents"][0]["eventType"] == "created"
+    assert detail.json()["data"]["executionCount"] == 1
+    assert "executions" not in detail.json()["data"]
+    assert "lifecycleEvents" not in detail.json()["data"]
+    events = client.get(f"/api/v1/sync-jobs/{job_id}/events").json()["data"]
+    assert events["items"][0]["eventType"] == "created"
+    assert events["total"] == 1
     assert detail.json()["data"]["syncRunId"] is None
     assert detail.json()["data"]["createdAt"].endswith("Z")
     listed = client.get("/api/v1/sync-jobs")
@@ -1001,6 +1006,7 @@ def test_job_enqueue_is_non_blocking_and_viewer_is_read_only(
         )
         viewer_list = viewer_client.get("/api/v1/sync-jobs")
         viewer_detail = viewer_client.get(f"/api/v1/sync-jobs/{job_id}")
+        viewer_events = viewer_client.get(f"/api/v1/sync-jobs/{job_id}/events")
         forbidden = viewer_client.post(
             "/api/v1/sync-jobs",
             json={
@@ -1013,7 +1019,8 @@ def test_job_enqueue_is_non_blocking_and_viewer_is_read_only(
     assert viewer_list.status_code == 200
     assert viewer_list.json()["data"]["items"][0]["id"] == job_id
     assert viewer_detail.status_code == 200
-    assert viewer_detail.json()["data"]["lifecycleEvents"][0]["actorName"] is None
+    assert viewer_detail.json()["data"]["executionCount"] == 1
+    assert viewer_events.json()["data"]["items"][0]["actorName"] is None
     assert forbidden.status_code == 403
     assert forbidden.json()["error"]["code"] == "PERMISSION_DENIED"
 
@@ -1686,7 +1693,8 @@ def test_dismiss_and_restore_failed_task_attention(
     assert detail["resolvedAt"] == "2026-09-17T09:30:00Z"
     assert detail["errorCode"] == "UPSTREAM_API_FAILED"
     assert detail["availableActions"] == ["restore_attention"]
-    assert any(event["eventType"] == "dismissed" for event in detail["lifecycleEvents"])
+    events = client.get(f"/api/v1/sync-jobs/tasks/{task_no}/events").json()["data"]
+    assert any(event["eventType"] == "dismissed" for event in events["items"])
     assert all(item["taskNo"] != task_no for item in attention["items"])
     assert any(item["taskNo"] == task_no for item in ended["items"])
     assert [item["taskNo"] for item in filtered["items"]] == [task_no]
@@ -1712,9 +1720,8 @@ def test_dismiss_and_restore_failed_task_attention(
     assert restored_detail["resolutionCode"] is None
     assert restored_detail["resolvedAt"] is None
     assert restored_detail["availableActions"] == ["retry", "dismiss"]
-    assert any(
-        event["eventType"] == "attention_restored" for event in restored_detail["lifecycleEvents"]
-    )
+    restored_events = client.get(f"/api/v1/sync-jobs/tasks/{task_no}/events").json()["data"]
+    assert any(event["eventType"] == "attention_restored" for event in restored_events["items"])
     assert restored_dashboard["failedJobs"] == 1
     assert restored_dashboard["failedRequests"] == 1
     with harness.session_factory() as db:
@@ -2171,8 +2178,16 @@ def test_dashboard_counts_latest_task_execution_and_preserves_failures(
     all_jobs = client.get("/api/v1/sync-jobs").json()["data"]
     assert all_jobs["summary"]["total"] == 2
     latest = next(row for row in all_jobs["items"] if row["taskNo"] == "logical-task")
-    executions = client.get(f"/api/v1/sync-jobs/{latest['id']}").json()["data"]["executions"]
-    assert [row["status"] for row in executions] == ["failed", latest_status]
+    executions = client.get(f"/api/v1/sync-jobs/{latest['id']}/executions?page=1&limit=1").json()[
+        "data"
+    ]
+    older_execution = client.get(
+        f"/api/v1/sync-jobs/{latest['id']}/executions?page=2&limit=1"
+    ).json()["data"]
+    assert executions["total"] == 2
+    assert executions["pageSize"] == 1
+    assert [row["status"] for row in executions["items"]] == [latest_status]
+    assert [row["status"] for row in older_execution["items"]] == ["failed"]
 
 
 def test_dashboard_counts_all_enabled_and_scheduled_policies(

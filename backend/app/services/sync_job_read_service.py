@@ -180,3 +180,22 @@ def lifecycle_events(
                     }
                 )
     return sorted(events, key=lambda item: (str(item["occurredAt"]), str(item["id"])))
+
+
+def lifecycle_event_page(
+    db: Session,
+    job: SyncJob,
+    page: int,
+    limit: int,
+    *,
+    include_actor: bool = False,
+) -> dict[str, object]:
+    """按最新优先分页返回任务生命周期事件。"""
+    events = list(reversed(lifecycle_events(db, job, include_actor=include_actor)))
+    start = (page - 1) * limit
+    return {
+        "items": events[start : start + limit],
+        "total": len(events),
+        "page": page,
+        "pageSize": limit,
+    }

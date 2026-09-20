@@ -290,13 +290,40 @@ describe("API 客户端", () => {
     );
 
     await api.getSyncTask("task/demo 1");
+    await api.getSyncTaskExecutions("task/demo 1", 2, 10);
+    await api.getSyncTaskEvents("task/demo 1", 3, 5);
+    await api.getSyncJobExecutions("job/9", 2, 10);
+    await api.getSyncJobEvents("job/9", 3, 5);
     await api.pauseSyncTask("task/demo 1", "csrf-token");
 
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       "/api/v1/sync-jobs/tasks/task%2Fdemo%201",
+      "/api/v1/sync-jobs/tasks/task%2Fdemo%201/executions?page=2&limit=10",
+      "/api/v1/sync-jobs/tasks/task%2Fdemo%201/events?page=3&limit=5",
+      "/api/v1/sync-jobs/job%2F9/executions?page=2&limit=10",
+      "/api/v1/sync-jobs/job%2F9/events?page=3&limit=5",
       "/api/v1/sync-jobs/tasks/task%2Fdemo%201/pause",
     ]);
-    expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get("X-CSRF-Token")).toBe("csrf-token");
+    expect(new Headers(fetchMock.mock.calls[5][1]?.headers).get("X-CSRF-Token")).toBe("csrf-token");
+  });
+
+  it("带取消信号的详情请求不与其他调用共享", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ data: {}, requestId: "r-abort" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    const controller = new AbortController();
+
+    await Promise.all([
+      api.getSyncTask("task-1", controller.signal),
+      api.getSyncTask("task-1", controller.signal),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][1]?.signal).toBe(controller.signal);
   });
 
   it("退货订单查询只发送结构化筛选字段", async () => {

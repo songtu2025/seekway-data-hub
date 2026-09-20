@@ -12,7 +12,7 @@ from backend.app.models.user import UserRole
 from backend.app.schemas.sync_job import SyncJobCreateRequest, SyncJobPreviewRequest
 from backend.app.services.api_policy_service import catalog_by_code
 from backend.app.services.scheduled_plan_service import list_scheduled_plans
-from backend.app.services.sync_job_read_service import lifecycle_events
+from backend.app.services.sync_job_read_service import lifecycle_event_page
 from backend.app.services.sync_job_service import (
     RetryJobOutcome,
     RetryJobResult,
@@ -33,7 +33,8 @@ from backend.app.services.sync_job_service import (
     retry_job,
     stop_job,
     task_context,
-    task_executions,
+    task_execution_count,
+    task_execution_page,
     withdraw_pause_job,
 )
 from backend.app.services.worker_runtime_service import queued_job_info
@@ -50,7 +51,6 @@ TaskAction = Literal["pause", "withdraw_pause", "resume", "stop", "cancel"]
 def _job_detail_data(
     db: Session,
     settings: WebSettings,
-    context: AuthContext,
     job: SyncJob,
     account_name: str | None,
     sync_run_id: int | None,
@@ -70,14 +70,41 @@ def _job_detail_data(
         task_created_at=task_created_at,
         last_updated_at=last_updated_at,
     )
-    data["executions"] = task_executions(db, job)
+    data["executionCount"] = task_execution_count(db, job)
     data["queueInfo"] = queued_job_info(db, job, settings)
-    data["lifecycleEvents"] = lifecycle_events(
-        db,
-        job,
-        include_actor=context.user.role == UserRole.ADMIN,
-    )
     return data
+
+
+def _execution_page_response(
+    request: Request,
+    db: Session,
+    job: SyncJob,
+    page: int,
+    limit: int,
+) -> dict[str, object]:
+    """返回统一执行记录分页响应。"""
+    return success_response(request, task_execution_page(db, job, page, limit))
+
+
+def _event_page_response(
+    request: Request,
+    db: Session,
+    job: SyncJob,
+    context: AuthContext,
+    page: int,
+    limit: int,
+) -> dict[str, object]:
+    """返回统一生命周期事件分页响应。"""
+    return success_response(
+        request,
+        lifecycle_event_page(
+            db,
+            job,
+            page,
+            limit,
+            include_actor=context.user.role == UserRole.ADMIN,
+        ),
+    )
 
 
 def _perform_task_action(
@@ -222,13 +249,39 @@ def get_sync_task(
     request: Request,
     db: DatabaseSession,
     settings: WebConfig,
-    context: AuthenticatedContext,
+    _: AuthenticatedContext,
 ) -> dict[str, object]:
     job, account_name, sync_run_id = get_task(db, task_no)
     return success_response(
         request,
-        _job_detail_data(db, settings, context, job, account_name, sync_run_id),
+        _job_detail_data(db, settings, job, account_name, sync_run_id),
     )
+
+
+@router.get("/tasks/{task_no}/executions")
+def get_sync_task_executions(
+    task_no: TaskNumber,
+    request: Request,
+    db: DatabaseSession,
+    _: AuthenticatedContext,
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> dict[str, object]:
+    job = current_task_job(db, task_no)
+    return _execution_page_response(request, db, job, page, limit)
+
+
+@router.get("/tasks/{task_no}/events")
+def get_sync_task_events(
+    task_no: TaskNumber,
+    request: Request,
+    db: DatabaseSession,
+    context: AuthenticatedContext,
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 5,
+) -> dict[str, object]:
+    job = current_task_job(db, task_no)
+    return _event_page_response(request, db, job, context, page, limit)
 
 
 @router.post("/tasks/{task_no}/pause")
@@ -454,13 +507,39 @@ def get_sync_job(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[WebSettings, Depends(get_web_settings)],
-    context: Annotated[AuthContext, Depends(get_auth_context)],
+    _: Annotated[AuthContext, Depends(get_auth_context)],
 ) -> dict[str, object]:
     job, account_name, sync_run_id = get_job(db, job_id)
     return success_response(
         request,
-        _job_detail_data(db, settings, context, job, account_name, sync_run_id),
+        _job_detail_data(db, settings, job, account_name, sync_run_id),
     )
+
+
+@router.get("/{job_id}/executions")
+def get_sync_job_executions(
+    job_id: int,
+    request: Request,
+    db: DatabaseSession,
+    _context: AuthenticatedContext,
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> dict[str, object]:
+    job, _account_name, _sync_run_id = get_job(db, job_id)
+    return _execution_page_response(request, db, job, page, limit)
+
+
+@router.get("/{job_id}/events")
+def get_sync_job_events(
+    job_id: int,
+    request: Request,
+    db: DatabaseSession,
+    context: AuthenticatedContext,
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 5,
+) -> dict[str, object]:
+    job, _account_name, _sync_run_id = get_job(db, job_id)
+    return _event_page_response(request, db, job, context, page, limit)
 
 
 @router.post("/{job_id}/retry", status_code=status.HTTP_202_ACCEPTED)
