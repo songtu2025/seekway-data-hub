@@ -75,7 +75,7 @@ def test_compose_services_use_scoped_preflight_and_safe_runtime_contract() -> No
             f"backend.app.release_preflight --confirm-read-only-database --service {service_name}"
         ) in command
         assert service["read_only"] is True
-        assert service["restart"] == "on-failure"
+        assert service["restart"] == "unless-stopped"
         assert service["cap_drop"] == ["ALL"]
         assert service["security_opt"] == ["no-new-privileges:true"]
         assert "${SEEKWAY_DB_CERT_DIR:-./config/ecs}:/run/db-certs:ro" in service["volumes"]
@@ -87,3 +87,18 @@ def test_compose_services_use_scoped_preflight_and_safe_runtime_contract() -> No
     assert services["worker"]["profiles"] == ["runtime"]
     assert services["worker"]["environment"]["WORKER_NAME"] == ""
     assert services["worker"]["stop_grace_period"] == "3h"
+
+
+def test_ecs_compose_environment_pins_host_ports() -> None:
+    compose_environment = PROJECT_ROOT / "config" / "ecs" / "compose.env.example"
+    values = dict(
+        line.split("=", 1)
+        for line in compose_environment.read_text("utf-8").splitlines()
+        if line.strip()
+    )
+
+    assert values == {
+        "SEEKWAY_ENV_FILE": "/etc/seekway-data-hub.env",
+        "SEEKWAY_API_PORT": "8000",
+        "SEEKWAY_FRONTEND_PORT": "18081",
+    }

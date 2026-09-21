@@ -77,6 +77,7 @@ class AppSettings(BaseSettings):
     db_password: str = "your_db_password"
     db_tls_mode: DatabaseTlsMode = "disabled"
     db_tls_ca_path: Path | None = None
+    db_allow_unencrypted_private_network: bool = False
     db_pool_size: int = Field(default=5, ge=1, le=MAX_DB_POOL_SIZE)
     db_max_overflow: int = Field(default=5, ge=0, le=MAX_DB_MAX_OVERFLOW)
     db_pool_timeout_seconds: float = Field(
@@ -99,7 +100,12 @@ class AppSettings(BaseSettings):
         """拒绝超过当前数据库连接预算的运行时进程配置。"""
         if not runtime_database_capacity_valid(self):
             raise ValueError("Runtime database connection capacity exceeds budget")
-        validate_database_tls(self.app_env, self.db_tls_mode, self.db_tls_ca_path)
+        validate_database_tls(
+            self.app_env,
+            self.db_tls_mode,
+            self.db_tls_ca_path,
+            allow_unencrypted_private_network=(self.db_allow_unencrypted_private_network),
+        )
         return self
 
     @property
@@ -214,12 +220,20 @@ def validate_database_tls(
     app_env: str,
     tls_mode: DatabaseTlsMode,
     ca_path: Path | None,
+    *,
+    allow_unencrypted_private_network: bool = False,
 ) -> None:
-    """生产数据库必须校验 CA 与服务端身份，禁止明文或降级连接。"""
+    """生产数据库默认要求 TLS，仅允许显式声明的私网明文例外。"""
     if tls_mode == "verify_identity" and (ca_path is None or str(ca_path).strip() in {"", "."}):
         raise ValueError("DB_TLS_CA_PATH is required when DB_TLS_MODE=verify_identity")
-    if app_env.lower() in {"prod", "production"} and tls_mode != "verify_identity":
-        raise ValueError("Production requires DB_TLS_MODE=verify_identity")
+    if (
+        app_env.lower() in {"prod", "production"}
+        and tls_mode != "verify_identity"
+        and not allow_unencrypted_private_network
+    ):
+        raise ValueError(
+            "Production requires verified TLS or an explicit private-network exception"
+        )
 
 
 def load_api_configs(path: str | Path) -> list[dict[str, Any]]:

@@ -252,6 +252,24 @@ MIGRATION_DB_PASSWORD=migration_password
 
         self.assertEqual(settings.db_tls_mode, "verify_identity")
 
+    def test_production_runtime_allows_explicit_private_network_exception(self):
+        settings = AppSettings(
+            _env_file=None,
+            app_env="production",
+            db_tls_mode="disabled",
+            db_allow_unencrypted_private_network=True,
+        )
+
+        self.assertTrue(settings.db_allow_unencrypted_private_network)
+
+    def test_production_migration_still_requires_verified_database_tls(self):
+        with self.assertRaises(ValueError):
+            MigrationDatabaseSettings(
+                _env_file=None,
+                app_env="production",
+                db_tls_mode="disabled",
+            )
+
     def test_local_migration_loader_uses_runtime_database_fallback(self):
         runtime_settings = AppSettings(
             _env_file=None,

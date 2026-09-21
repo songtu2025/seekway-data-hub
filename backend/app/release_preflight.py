@@ -1,8 +1,10 @@
 import argparse
 import json
+import socket
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from ipaddress import IPv4Address, IPv4Network, ip_address
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 PRODUCTION_WORKER_PROCESSES = 4
 PRODUCTION_SYNC_LOCK_SCOPE = "account"
+PRIVATE_DATABASE_NETWORKS: tuple[IPv4Network, ...] = (
+    IPv4Network("10.0.0.0/8"),
+    IPv4Network("172.16.0.0/12"),
+    IPv4Network("192.168.0.0/16"),
+)
+PRIVATE_NETWORK_UNENCRYPTED_DATABASE = "PRIVATE_NETWORK_UNENCRYPTED_DATABASE"
 
 
 class _ViteAssetParser(HTMLParser):
@@ -164,6 +172,7 @@ def main(
                                 result = ReleasePreflightResult(
                                     "pass",
                                     "RELEASE_PREFLIGHT_PASSED",
+                                    _database_transport_reason(app_settings),
                                 )
     except Exception:
         result = ReleasePreflightResult("error", "RELEASE_PREFLIGHT_RUNTIME_ERROR")
@@ -208,17 +217,47 @@ def _production_settings_valid(
         app_settings.db_name,
         app_settings.db_user,
         app_settings.db_password,
-        app_settings.db_tls_ca_path,
     )
     if not all(_configured(value) for value in runtime_values):
         return False
     if not runtime_database_capacity_valid(app_settings):
         return False
-    if app_settings.db_tls_mode != "verify_identity":
+    if not _database_transport_valid(app_settings):
         return False
     if not str(web_settings.public_web_url).lower().startswith("https://"):
         return False
     return str(app_settings.jijia_base_url).lower().startswith("https://")
+
+
+def _database_transport_valid(app_settings: Any) -> bool:
+    """校验生产数据库传输模式，明文例外只能指向 RFC1918 私网地址。"""
+    if app_settings.db_tls_mode == "verify_identity":
+        return _configured(app_settings.db_tls_ca_path)
+    if app_settings.db_tls_mode != "disabled" or not bool(
+        app_settings.db_allow_unencrypted_private_network
+    ):
+        return False
+    return _host_resolves_only_private_ipv4(str(app_settings.db_host))
+
+
+def _host_resolves_only_private_ipv4(host: str) -> bool:
+    """确认数据库主机的全部解析结果均属于 RFC1918 私网。"""
+    try:
+        records = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        addresses = {ip_address(record[4][0]) for record in records}
+    except (OSError, ValueError):
+        return False
+    return bool(addresses) and all(
+        isinstance(address, IPv4Address)
+        and any(address in network for network in PRIVATE_DATABASE_NETWORKS)
+        for address in addresses
+    )
+
+
+def _database_transport_reason(app_settings: Any) -> str | None:
+    if app_settings.db_tls_mode == "disabled":
+        return PRIVATE_NETWORK_UNENCRYPTED_DATABASE
+    return None
 
 
 def _frontend_build_valid(index_path: Path) -> bool:

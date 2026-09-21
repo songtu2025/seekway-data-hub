@@ -1,5 +1,6 @@
 import inspect
 import json
+import socket
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -40,6 +41,7 @@ def _settings(tmp_path: Path):
         db_password="runtime_password",
         db_tls_mode="verify_identity",
         db_tls_ca_path="/run/db-certs/polardb-ca.pem",
+        db_allow_unencrypted_private_network=False,
         db_pool_size=3,
         db_max_overflow=2,
         db_pool_timeout_seconds=30,
@@ -177,6 +179,78 @@ def test_release_preflight_requires_verified_database_tls(
         app_settings_loader=lambda: app_settings,
         web_settings_loader=lambda: web_settings,
         engine_factory=lambda _settings: pytest.fail("TLS 配置不合格时不能创建引擎"),
+    )
+
+    assert exit_code == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "RELEASE_CONFIG_INVALID"
+
+
+def test_release_preflight_allows_explicit_private_network_exception(
+    tmp_path,
+    capsys,
+    monkeypatch,
+) -> None:
+    _build_frontend(tmp_path)
+    app_settings, web_settings = _settings(tmp_path)
+    app_settings.db_tls_mode = "disabled"
+    app_settings.db_tls_ca_path = None
+    app_settings.db_allow_unencrypted_private_network = True
+    engine = FakeEngine()
+    monkeypatch.setattr(
+        release_preflight.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.8", 0))],
+    )
+
+    exit_code = release_preflight.main(
+        ["--confirm-read-only-database"],
+        project_root=tmp_path,
+        app_settings_loader=lambda: app_settings,
+        web_settings_loader=lambda: web_settings,
+        engine_factory=lambda _settings: engine,
+        verifier=lambda _engine: PreflightResult(
+            status="pass",
+            code="RUNTIME_TARGET_READY",
+        ),
+        published_configs_loader=lambda _engine: [{"api_code": "sale_return_order_page"}],
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "status": "pass",
+        "code": "RELEASE_PREFLIGHT_PASSED",
+        "reasonCode": "PRIVATE_NETWORK_UNENCRYPTED_DATABASE",
+    }
+    assert engine.disposed is True
+
+
+@pytest.mark.parametrize("resolved_ip", ["203.0.113.8", "10.0.0.8"])
+def test_release_preflight_rejects_public_or_mixed_database_resolution(
+    tmp_path,
+    capsys,
+    monkeypatch,
+    resolved_ip,
+) -> None:
+    _build_frontend(tmp_path)
+    app_settings, web_settings = _settings(tmp_path)
+    app_settings.db_tls_mode = "disabled"
+    app_settings.db_tls_ca_path = None
+    app_settings.db_allow_unencrypted_private_network = True
+    addresses = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (resolved_ip, 0))]
+    if resolved_ip == "10.0.0.8":
+        addresses.append((socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.9", 0)))
+    monkeypatch.setattr(
+        release_preflight.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: addresses,
+    )
+
+    exit_code = release_preflight.main(
+        ["--confirm-read-only-database"],
+        project_root=tmp_path,
+        app_settings_loader=lambda: app_settings,
+        web_settings_loader=lambda: web_settings,
+        engine_factory=lambda _settings: pytest.fail("公网解析结果不能创建引擎"),
     )
 
     assert exit_code == 2
