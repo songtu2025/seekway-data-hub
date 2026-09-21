@@ -97,6 +97,7 @@ services:
     <<: *app-service
     profiles:
       - runtime
+    scale: 4
     environment:
       WORKER_NAME: ""
     command:

@@ -85,6 +85,8 @@ def test_compose_services_use_scoped_preflight_and_safe_runtime_contract() -> No
     assert services["scheduler"]["profiles"] == ["runtime"]
     assert services["scheduler"]["container_name"] == "seekway-datahub-scheduler"
     assert services["worker"]["profiles"] == ["runtime"]
+    assert services["worker"]["scale"] == 4
+    assert "container_name" not in services["worker"]
     assert services["worker"]["environment"]["WORKER_NAME"] == ""
     assert services["worker"]["stop_grace_period"] == "3h"
 
