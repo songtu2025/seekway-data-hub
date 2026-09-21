@@ -7,8 +7,8 @@ import {
   jobActionGuidance,
   type SyncJobControlAction,
 } from "../pages/syncJobDetailModel";
-import { changeCatchupLabel, formatDate, statusLabel } from "../pages/m3Utils";
-import { taskStatusLabel } from "../pages/syncJobStatus";
+import { formatDate, statusLabel } from "../pages/m3Utils";
+import { getTaskStatus, syncProgressStatus, taskStatusLabel } from "../pages/syncJobStatus";
 
 export function SyncJobProgressSection({
   job,
@@ -22,6 +22,9 @@ export function SyncJobProgressSection({
   const progress = job.historyProgress;
   const metrics = job.progressSummary;
   const isIncremental = job.jobType === "update_incremental";
+  const progressStatus = progress
+    ? syncProgressStatus(job.jobType, getTaskStatus(job), progress.changeCatchup)
+    : null;
   const title =
     job.jobType === "history_backfill"
       ? "历史扫描进度"
@@ -63,9 +66,9 @@ export function SyncJobProgressSection({
               : "按完整任务范围累计，执行记录共同构成此进度。"}
           </p>
         </div>
-        {progress ? (
-          <Tag className={`m3-status m3-status--${progress.changeCatchup}`} role="status">
-            {changeCatchupLabel(progress.changeCatchup)}
+        {progressStatus ? (
+          <Tag className={`m3-status m3-status--${progressStatus.code}`} role="status">
+            {progressStatus.label}
           </Tag>
         ) : null}
       </div>

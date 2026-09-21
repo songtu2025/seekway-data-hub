@@ -8,7 +8,8 @@ import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { RefreshStatus } from "../components/RefreshStatus";
 import { useVisiblePolling } from "../hooks/useVisiblePolling";
-import { changeCatchupLabel, formatDate, getApiErrorMessage, statusLabel } from "./m3Utils";
+import { formatDate, getApiErrorMessage, statusLabel } from "./m3Utils";
+import { syncProgressStatus } from "./syncJobStatus";
 
 type InboxView = "attention" | "active" | "all";
 type InboxItemType = "all" | "runtime" | "progress";
@@ -104,6 +105,13 @@ export function DashboardPage() {
   });
 
   const progress = summary?.historyProgress;
+  const progressStatus = progress
+    ? syncProgressStatus(
+        summary?.historyJobType,
+        summary?.historyTaskStatus,
+        progress.changeCatchup,
+      )
+    : null;
   const accounts = summary?.accounts ?? { total: 0, active: 0, attention: 0, inactive: 0 };
   const policies = summary?.policies ?? { total: 0, enabled: 0, scheduled: 0 };
   const worker = summary?.worker;
@@ -340,7 +348,7 @@ export function DashboardPage() {
                         <span>
                           <strong>历史追赶任务</strong>
                           <small className="dashboard-history-copy">
-                            <span>{changeCatchupLabel(progress.changeCatchup)}</span>
+                            {progressStatus ? <span>{progressStatus.label}</span> : null}
                             <span>
                               {progress.completedWindows} / {progress.totalWindows}
                             </span>

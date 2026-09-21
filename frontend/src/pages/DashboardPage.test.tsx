@@ -62,6 +62,8 @@ describe("同步概览", () => {
         startedAt: "2026-08-26T02:00:00Z",
       },
       latestDataAt: "2026-09-17T10:32:00Z",
+      historyJobType: "update_incremental",
+      historyTaskStatus: "success",
       historyProgress: {
         completedWindows: 4,
         totalWindows: 79,
@@ -125,6 +127,37 @@ describe("同步概览", () => {
       "href",
       "/jobs?group=attention",
     );
+  });
+
+  it("历史回填使用任务状态而不是尚未开始的增量追赶状态", async () => {
+    vi.mocked(api.getDashboard).mockResolvedValue({
+      queuedJobs: 0,
+      runningJobs: 1,
+      failedJobs: 0,
+      failedRequests: 0,
+      latestRun: null,
+      historyJobType: "history_backfill",
+      historyTaskStatus: "in_progress",
+      historyProgress: {
+        completedWindows: 1108,
+        totalWindows: 1875,
+        currentWindow: { startDate: "2024-08-13", endDate: "2024-08-13" },
+        currentPage: 37,
+        totalPages: 88,
+        earliestObservedDataDate: "2021-08-03",
+        historyCompleteThrough: "2024-08-12",
+        changeCatchup: "pending",
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("进行中")).toBeInTheDocument();
+    expect(screen.queryByText("待开始")).not.toBeInTheDocument();
   });
 
   it("Viewer无待处理任务时提供查看入口而非创建", async () => {

@@ -1,4 +1,5 @@
-import type { SyncJob, SyncTaskStatus } from "../api/types";
+import type { ChangeCatchupStatus, SyncJob, SyncJobType, SyncTaskStatus } from "../api/types";
+import { changeCatchupLabel } from "./m3Utils";
 
 const activeStatuses = new Set(["queued", "running", "pause_requested"]);
 
@@ -41,6 +42,17 @@ export function isTaskActive(status: SyncTaskStatus): boolean {
 
 export function taskStatusLabel(status: SyncTaskStatus): string {
   return taskStatusLabels[status];
+}
+
+export function syncProgressStatus(
+  jobType: SyncJobType | null | undefined,
+  taskStatus: SyncTaskStatus | null | undefined,
+  changeCatchup: ChangeCatchupStatus,
+): { code: ChangeCatchupStatus | SyncTaskStatus; label: string } | null {
+  if (jobType === "update_incremental") {
+    return { code: changeCatchup, label: changeCatchupLabel(changeCatchup) };
+  }
+  return taskStatus ? { code: taskStatus, label: taskStatusLabel(taskStatus) } : null;
 }
 
 export function taskWindowProgress(job: SyncJob): { completed: number; total: number } | null {

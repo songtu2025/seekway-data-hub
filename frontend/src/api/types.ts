@@ -654,6 +654,8 @@ export interface DashboardSummary {
   failedRequests: number;
   latestRun: SyncRun | null;
   historyProgress: HistoryProgress | null;
+  historyJobType?: SyncJobType | null;
+  historyTaskStatus?: SyncTaskStatus | null;
   accounts?: {
     total: number;
     active: number;

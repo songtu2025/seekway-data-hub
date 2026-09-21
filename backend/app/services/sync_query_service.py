@@ -31,7 +31,7 @@ from backend.app.services.m3_common import (
     public_history_progress,
     utc_iso,
 )
-from backend.app.services.sync_job_service import latest_execution_ids
+from backend.app.services.sync_job_service import latest_execution_ids, task_status
 from backend.app.services.sync_query_filters import (
     AuditLogFilters,
     RawDataFilters,
@@ -542,6 +542,8 @@ def dashboard_summary(db: Session) -> dict[str, object]:
             if latest_progress_job
             else None
         ),
+        "historyJobType": latest_progress_job.job_type if latest_progress_job else None,
+        "historyTaskStatus": task_status(latest_progress_job) if latest_progress_job else None,
         "accounts": {
             "total": sum(account_counts.values()),
             "active": account_counts.get(JijiaAccountStatus.ACTIVE.value, 0),

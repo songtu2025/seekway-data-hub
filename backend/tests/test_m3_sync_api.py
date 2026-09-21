@@ -1792,6 +1792,8 @@ def test_manual_job_uses_update_window_after_history_checkpoint_completes(
     assert detail.json()["data"]["jobType"] == "update_incremental"
     dashboard = client.get("/api/v1/dashboard")
     assert dashboard.json()["data"]["historyProgress"]["changeCatchup"] == "running"
+    assert dashboard.json()["data"]["historyJobType"] == "update_incremental"
+    assert dashboard.json()["data"]["historyTaskStatus"] == "in_progress"
 
 
 def test_raw_queries_isolate_accounts_and_viewer_sql_never_selects_raw_json(
@@ -2132,6 +2134,8 @@ def test_run_children_use_account_and_batch_scope_and_dashboard_contract(
         "failedRequests",
         "latestRun",
         "historyProgress",
+        "historyJobType",
+        "historyTaskStatus",
     }
     assert set(dashboard.json()["data"]) >= {
         "accounts",

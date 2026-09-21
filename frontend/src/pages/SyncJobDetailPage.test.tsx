@@ -243,7 +243,7 @@ describe("同步任务详情", () => {
         totalPages: 6,
         earliestObservedDataDate: "2021-01-01",
         historyCompleteThrough: "2021-01-31",
-        changeCatchup: "running",
+        changeCatchup: "pending",
       },
     });
 
@@ -479,6 +479,8 @@ describe("同步任务详情", () => {
       apiCode: "sale_return_order_page",
       jobType: "history_backfill",
       status: "running",
+      taskStatus: "in_progress",
+      executionStatus: "running",
       historyProgress: {
         completedWindows: 0,
         totalWindows: 79,
@@ -501,6 +503,12 @@ describe("同步任务详情", () => {
 
     expect(await screen.findByText("等待首个分页结果")).toBeInTheDocument();
     expect(screen.queryByText("0 / 0")).not.toBeInTheDocument();
+    const progressSection = screen
+      .getByRole("heading", { name: "历史扫描进度" })
+      .closest("section");
+    expect(progressSection).not.toBeNull();
+    expect(within(progressSection!).getByRole("status")).toHaveTextContent("进行中");
+    expect(within(progressSection!).queryByText("待开始")).not.toBeInTheDocument();
   });
 
   it("活动任务轮询后把等待状态更新为真实页码", async () => {
@@ -519,7 +527,7 @@ describe("同步任务详情", () => {
           totalPages: 0,
           earliestObservedDataDate: null,
           historyCompleteThrough: null,
-          changeCatchup: "running",
+          changeCatchup: "pending",
         },
       })
       .mockResolvedValue({
@@ -535,7 +543,7 @@ describe("同步任务详情", () => {
           totalPages: 416,
           earliestObservedDataDate: "2020-01-03",
           historyCompleteThrough: null,
-          changeCatchup: "running",
+          changeCatchup: "pending",
         },
       });
     render(
@@ -1739,7 +1747,7 @@ function runningJobWithPage(currentPage: number): SyncJob {
       totalPages: 10,
       earliestObservedDataDate: null,
       historyCompleteThrough: null,
-      changeCatchup: "running",
+      changeCatchup: "pending",
     },
   };
 }
