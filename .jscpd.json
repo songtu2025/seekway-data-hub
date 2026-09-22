@@ -3,8 +3,7 @@
     "app",
     "backend/app",
     "frontend/src",
-    "scripts",
-    "request_sale_return_order_page.py"
+    "scripts"
   ],
   "format": [
     "python",

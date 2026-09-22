@@ -7609,7 +7609,7 @@
   - `config/jijia_api_catalog.generated.json`
   - `docs/progress.md`
   - `docs/decisions.md`
-  - `docs/next_prompt.md`
+  - 当时的下一会话提示文档（已从工作树清理，原文见 Git 历史）
   - `tests/test_traffic_sku_analysis_page_config.py`
   - `tests/test_product_analyze_multi_index_page_config.py`
   - `tests/test_store_sales_performance_page_config.py`
@@ -7669,7 +7669,7 @@
 
 ## 2026-07-17 阶段 16Q：按板块审核终态机制
 
-- 已把按板块接入计划落盘到 `docs/superpowers/plans/2026-07-17-section-based-api-integration.md`，保持未暂存、未提交、未推送。
+- 当时已把按板块接入计划落盘，保持未暂存、未提交、未推送；该历史计划文件后来已从工作树清理，可在 Git 历史中查看。
 - 新增 `config/api_review_overrides.yaml`，用独立文件持久化未配置接口的人工审核终态；当前登记文档 596 为 `framework_auth_only`、文档 3095 为 `defer_sensitive_credentials`，两者均未请求真实业务接口。
 - catalog 状态优先级固定为：已配置状态 > 审核覆盖表 > 自动分类；审核文件缺失时继续兼容旧生成命令，未知状态会直接报错，避免误收口。
 - catalog CLI 新增 `--review-config`；summary 新增 `menu_progress`，按板块输出 `total/configured/enabled/terminal_deferred/pending_review/closed`。

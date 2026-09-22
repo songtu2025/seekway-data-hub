@@ -4,9 +4,6 @@ from datetime import date
 from unittest.mock import Mock
 
 from app.sale_return_discovery import discover_earliest_date
-from request_sale_return_order_page import (
-    request_all_pages,
-)
 
 
 def build_payload(page: int, total: int, row_count: int) -> dict:
@@ -24,40 +21,7 @@ def build_payload(page: int, total: int, row_count: int) -> dict:
     }
 
 
-class RequestSaleReturnOrderPageTest(unittest.TestCase):
-    def test_all_pages_uses_total_and_only_returns_summary(self):
-        request_page = Mock(
-            side_effect=[
-                build_payload(1, 250, 100),
-                build_payload(2, 250, 100),
-                build_payload(3, 250, 50),
-            ]
-        )
-        body = {
-            "returnStartDate": "2026-08-04",
-            "returnEndDate": "2026-08-10",
-            "page": 1,
-            "pagesize": 100,
-        }
-
-        result = request_all_pages(
-            request_page,
-            body,
-        )
-
-        self.assertEqual(request_page.call_count, 3)
-        self.assertEqual(
-            result["data_summary"],
-            {
-                "total": 250,
-                "required_pages": 3,
-                "requested_pages": 3,
-                "row_count": 250,
-                "complete": True,
-            },
-        )
-        self.assertNotIn("rows", json.dumps(result))
-
+class SaleReturnDiscoveryTest(unittest.TestCase):
     def test_discovery_skips_empty_windows_and_refines_first_nonempty_date(
         self,
     ):

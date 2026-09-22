@@ -80,7 +80,7 @@
 完成阶段时必须：
 
 1. 说明创建或修改的文件、验证结果、未完成内容和下一步。
-2. 更新 `docs/progress.md`、`docs/decisions.md` 和 `docs/next_prompt.md`。
+2. 更新 `docs/progress.md` 和 `docs/decisions.md`。
 3. 检查 `.env.example` 不含真实凭据、README 与实际运行方式一致、SQL 保持 MySQL 8/PolarDB MySQL 兼容。
 4. 执行 `npx jscpd frontend/src backend/app`、`cd frontend && npx knip`、`vulture backend/app --min-confidence 100` 和 `git diff --check`。
 5. 检查敏感信息、意外文件、修改范围，并保留用户已有的未提交改动。
