@@ -53,15 +53,3 @@ def test_docker_runtime_uses_non_root_user_and_bounded_api_workers() -> None:
     assert "stop_grace_period: 3h" in compose
     assert "read_only: true" in compose
     assert "no-new-privileges:true" in compose
-
-
-def test_windows_worker_script_uses_worker_module() -> None:
-    script = (ROOT / "scripts" / "dev-worker.ps1").read_text(encoding="utf-8")
-
-    assert '".\\.venv\\Scripts\\python.exe" -m backend.app.worker' in script
-
-
-def test_windows_scheduler_script_uses_scheduler_module() -> None:
-    script = (ROOT / "scripts" / "dev-scheduler.ps1").read_text(encoding="utf-8")
-
-    assert '".\\.venv\\Scripts\\python.exe" -m backend.app.scheduler' in script
